@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nations Of Sky - CRM</title>
+
   <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
   <style>
     :root {
       --primary: #2563eb;
@@ -19,6 +24,7 @@
       background: var(--bg); 
       color: var(--text);
       line-height: 1.6;
+      direction: ltr; /* التوجيه لليسار عشان الأرقام والأسماء الإنجليزية */
     }
     .container { max-width: 500px; margin: 0 auto; }
     .card { 
@@ -40,7 +46,7 @@
       box-sizing: border-box;
     }
     input:focus, select:focus, textarea:focus {
-      outline: none; border-color: var(--primary); ring: 2px var(--primary);
+      outline: none; border-color: var(--primary); border-width: 2px;
     }
     
     button {
@@ -57,8 +63,7 @@
     .row { display: flex; gap: 10px; }
     .row > div { flex: 1; }
   </style>
-</head>
-<body>
+</head><body>
 
 <div class="container">
   <div class="card">
