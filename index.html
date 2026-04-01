@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nations Of Sky - CRM</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --success: #16a34a;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+    }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      padding: 15px; 
+      background: var(--bg); 
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container { max-width: 500px; margin: 0 auto; }
+    .card { 
+      background: var(--card); 
+      padding: 20px; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); 
+      margin-bottom: 20px;
+    }
+    h2, h3 { text-align: center; margin-top: 0; color: var(--primary); }
+    
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
+    
+    input, select, textarea {
+      width: 100%; padding: 12px; border-radius: 10px; 
+      border: 1px solid #e2e8f0; background: #fff;
+      font-size: 16px; transition: border 0.3s;
+      box-sizing: border-box;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--primary); ring: 2px var(--primary);
+    }
+    
+    button {
+      width: 100%; padding: 14px; border-radius: 10px; border: none;
+      color: white; font-weight: bold; font-size: 16px; cursor: pointer;
+      transition: opacity 0.3s, transform 0.1s;
+    }
+    button:active { transform: scale(0.98); }
+    #submitBtn { background: var(--primary); margin-top: 10px; }
+    #exportBtn { background: var(--success); }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .export-section { border-top: 2px solid #f1f5f9; padding-top: 20px; margin-top: 10px; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="card">
+    <h2>Nations Of Sky</h2>
+    <h3>📞 Log Call</h3>
+
+    <div class="row">
+      <div class="form-group">
+        <label>Agent Name</label>
+        <select id="agent">
+          <option value="">Choose Name</option>
+          <option>Hussein</option>
+          <option>Kareem</option>
+          <option>Ahmed</option>
+          <option>Yassmin</option>
+          <option>Hader</option>
+          <option>Sief Elden</option>
+          <option>Abanoub</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>Project</label>
+        <select id="project">
+          <option value="">Select Project</option>
+          <option>Jirian</option>
+          <option>Sky Ridge Elite</option>
+          <option>Zomra</option>
+          <option>Upviews</option>
+          <option>ISLA</option>
+          <option>Sky Ridge Executives</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Client Details</label>
+      <input id="client" placeholder="Client Name">
+      <input id="phone" type="tel" placeholder="Phone Number">
+    </div>
+
+    <div class="form-group">
+      <label>Call Status</label>
+      <select id="status">
+        <option>Interested</option>
+        <option>Not Interested</option>
+        <option>Call Back</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="notes" rows="3" placeholder="Write call details..."></textarea>
+    </div>
+
+    <button id="submitBtn" onclick="submitData()">Save Call Log</button>
+  </div>
+
+  <div class="card export-section">
+    <h3>📊 Reports</h3>
+    <div class="row">
+      <div class="form-group">
+        <label>From</label>
+        <input type="date" id="dateFrom">
+      </div>
+      <div class="form-group">
+        <label>To</label>
+        <input type="date" id="dateTo">
+      </div>
+    </div>
+    <button id="exportBtn" onclick="exportData()">Download Report (CSV)</button>
+  </div>
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbwge-qn-Ihxwd6LURFDpm4DhIIneBNZlfS3_WL2AGDx-Wyg9kQ0KWtXHLE-gpUna5WNtg/exec";
+
+function submitData() {
+  const submitBtn = document.getElementById("submitBtn");
+  const data = {
+    agent: document.getElementById("agent").value,
+    project: document.getElementById("project").value,
+    clientName: document.getElementById("client").value,
+    phone: document.getElementById("phone").value,
+    status: document.getElementById("status").value,
+    notes: document.getElementById("notes").value
+  };
+
+  if(!data.agent || !data.project || !data.clientName || !data.phone) {
+      alert("⚠️ Please complete all required fields");
+      return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.innerText = "Saving...";
+
+  fetch(API_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  })
+  .then(() => {
+    alert("✅ Logged Successfully!");
+    document.getElementById("client").value = "";
+    document.getElementById("phone").value = "";
+    document.getElementById("notes").value = "";
+  })
+  .catch(err => alert("❌ Error: " + err))
+  .finally(() => {
+    submitBtn.disabled = false;
+    submitBtn.innerText = "Save Call Log";
+  });
+}
+
+function exportData() {
+  const dateFrom = document.getElementById("dateFrom").value;
+  const dateTo = document.getElementById("dateTo").value;
+
+  if(!dateFrom || !dateTo) {
+      alert("⚠️ Select date range first");
+      return;
+  }
+
+  const exportBtn = document.getElementById("exportBtn");
+  exportBtn.innerText = "Downloading...";
+  
+  fetch(`${API_URL}?start=${dateFrom}&end=${dateTo}`)
+    .then(res => res.json())
+    .then(data => {
+      if(data.length === 0) { alert("No data found"); return; }
+      let csv = "\ufeff"; // BOM for Excel Arabic support
+      data.forEach(row => {
+        csv += row.map(cell => `"${cell}"`).join(",") + "\n";
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Report_${dateFrom}_to_${dateTo}.csv`;
+      a.click();
+    })
+    .catch(err => alert("❌ Error: " + err))
+    .finally(() => { exportBtn.innerText = "Download Report (CSV)"; });
+}
+</script>
+</body>
+</html>
