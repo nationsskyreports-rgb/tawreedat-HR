@@ -9,7 +9,7 @@ const settingsSections = [
     title: "Organization",
     icon: Building2,
     items: [
-      { label: "Company Name", value: "Nations of Sky (NOS)" },
+      { label: "Company Name", value: "Tawreedat" },
       { label: "Country", value: "Egypt" },
       { label: "Currency", value: "EGP — Egyptian Pound" },
       { label: "Timezone", value: "Africa/Cairo (GMT+2)" },
