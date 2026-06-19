@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { useTheme } from "next-themes"
 import { Sidebar } from "@/components/sidebar"
 import { OverviewTab } from "@/components/overview-tab"
 import { CheckinTab } from "@/components/checkin-tab"
@@ -11,7 +12,7 @@ import { EmployeesTab } from "@/components/employees-tab"
 import { ProjectsTab } from "@/components/projects-tab"
 import { SchedulingTab } from "@/components/scheduling-tab"
 import { SettingsTab } from "@/components/settings-tab"
-import { Bell, Search, X } from "lucide-react"
+import { Bell, Search, X, Sun, Moon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 
@@ -27,6 +28,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState("overview")
   const [showNotifications, setShowNotifications] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const { theme, setTheme } = useTheme()
   const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -72,6 +74,12 @@ export default function Page() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </button>
             <div className="relative" ref={notifRef}>
               <button onClick={() => setShowNotifications(!showNotifications)} className="relative">
                 <Bell className="size-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
