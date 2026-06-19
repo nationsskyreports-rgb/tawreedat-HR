@@ -13,6 +13,7 @@ import { SchedulingTab } from "@/components/scheduling-tab"
 import { SettingsTab } from "@/components/settings-tab"
 import { Bell, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { supabase } from "@/lib/supabase"
 
 const alerts = [
   { type: "License Expiry", count: 23, urgency: "high" },
@@ -25,9 +26,14 @@ const alerts = [
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview")
   const [showNotifications, setShowNotifications] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? null)
+    })
+
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifications(false)
@@ -66,7 +72,6 @@ export default function Page() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-xs text-muted-foreground">EGY-CAI — Q4 2024</span>
             <div className="relative" ref={notifRef}>
               <button onClick={() => setShowNotifications(!showNotifications)} className="relative">
                 <Bell className="size-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
@@ -100,9 +105,11 @@ export default function Page() {
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-2">
               <div className="size-7 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-[10px] font-semibold text-primary">NE</span>
+                <span className="text-[10px] font-semibold text-primary">
+                  {userEmail?.charAt(0).toUpperCase() ?? "?"}
+                </span>
               </div>
-              <span className="text-xs text-foreground">Nadia El-Masry</span>
+              <span className="text-xs text-foreground">{userEmail ?? "..."}</span>
             </div>
           </div>
         </header>
