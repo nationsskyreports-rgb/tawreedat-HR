@@ -129,7 +129,7 @@ export default function Page() {
           ))}
           <div className="ml-auto flex items-center gap-2 shrink-0">
             <Badge variant="secondary" className="text-[10px] bg-chart-3/10 text-chart-3">
-              MVP Live — Phase 2
+              Phase 2
             </Badge>
           </div>
         </div>
