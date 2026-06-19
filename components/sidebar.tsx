@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Truck,
 } from "lucide-react"
+import { LogoutButton } from "@/components/logout-button"
 
 interface SidebarProps {
   activeTab: string
@@ -38,7 +39,6 @@ const bottomItems = [
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="flex flex-col w-60 min-h-screen bg-sidebar border-r border-border shrink-0">
-      {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border">
         <div className="flex items-center justify-center size-9 rounded-lg bg-primary">
           <Truck className="size-5 text-primary-foreground" />
@@ -49,7 +49,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-2">
           Modules
@@ -76,7 +75,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         })}
       </nav>
 
-      {/* Bottom */}
       <div className="px-3 pb-4 border-t border-border pt-3">
         {bottomItems.map((item) => {
           const Icon = item.icon
@@ -100,6 +98,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             <span className="text-xs text-muted-foreground truncate">HR Director</span>
           </div>
         </div>
+        <LogoutButton />
       </div>
     </aside>
   )
