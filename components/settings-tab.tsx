@@ -19,7 +19,7 @@ const settingsSections = [
     title: "System",
     icon: Globe,
     items: [
-      { label: "Language", value: "Arabic + English" },
+      { label: "Language", value: "English" },
       { label: "Date Format", value: "DD/MM/YYYY" },
       { label: "Working Week", value: "Sunday – Thursday" },
       { label: "Weekend", value: "Friday – Saturday" },
