@@ -12,9 +12,10 @@ import { EmployeesTab } from "@/components/employees-tab"
 import { ProjectsTab } from "@/components/projects-tab"
 import { SchedulingTab } from "@/components/scheduling-tab"
 import { SettingsTab } from "@/components/settings-tab"
-import { Bell, Search, X, Sun, Moon } from "lucide-react"
+import { Bell, Search, X, Sun, Moon, Shield, Briefcase, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import type { Profile, UserRole } from "@/lib/types"
 
 const alerts = [
   { type: "License Expiry", count: 23, urgency: "high" },
@@ -24,17 +25,46 @@ const alerts = [
   { type: "Leave Requests", count: 89, urgency: "low" },
 ]
 
+const roleConfig: Record<UserRole, { label: string; color: string; icon: typeof Shield }> = {
+  admin:    { label: "Admin",    color: "bg-destructive/15 text-destructive", icon: Shield },
+  hr:       { label: "HR",       color: "bg-primary/15 text-primary",         icon: Briefcase },
+  manager:  { label: "Manager",  color: "bg-chart-2/15 text-chart-2",         icon: Briefcase },
+  employee: { label: "Employee", color: "bg-secondary text-secondary-foreground", icon: User },
+}
+
+function getInitials(name: string | null | undefined, fallback: string): string {
+  if (!name) return fallback.charAt(0).toUpperCase()
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+}
+
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview")
   const [showNotifications, setShowNotifications] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [searchValue, setSearchValue] = useState("")
   const { theme, setTheme } = useTheme()
   const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null)
-    })
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      setUserEmail(user.email ?? null)
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+
+      if (profileData) setProfile(profileData as Profile)
+    }
+
+    loadUser()
 
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
@@ -44,6 +74,11 @@ export default function Page() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  const displayName = profile?.full_name ?? userEmail ?? "..."
+  const initials = getInitials(profile?.full_name, userEmail ?? "?")
+  const role = profile?.role ?? "employee"
+  const RoleIcon = roleConfig[role].icon
 
   const tabContent: Record<string, React.ReactNode> = {
     overview: <OverviewTab />,
@@ -68,6 +103,8 @@ export default function Page() {
               <Search className="size-3.5 text-muted-foreground" />
               <input
                 type="text"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
                 placeholder="Search employees, projects..."
                 className="bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none w-52"
               />
@@ -77,11 +114,17 @@ export default function Page() {
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>
+
             <div className="relative" ref={notifRef}>
-              <button onClick={() => setShowNotifications(!showNotifications)} className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative"
+                aria-label="Notifications"
+              >
                 <Bell className="size-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
                 <div className="absolute -top-1 -right-1 size-3 bg-destructive rounded-full flex items-center justify-center">
                   <span className="text-[8px] text-white font-bold">4</span>
@@ -91,7 +134,7 @@ export default function Page() {
                 <div className="absolute right-0 top-8 w-72 bg-card border border-border rounded-xl shadow-2xl z-50">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <span className="text-xs font-medium text-foreground">Active Alerts</span>
-                    <button onClick={() => setShowNotifications(false)}>
+                    <button onClick={() => setShowNotifications(false)} aria-label="Close">
                       <X className="size-3.5 text-muted-foreground hover:text-foreground" />
                     </button>
                   </div>
@@ -110,14 +153,30 @@ export default function Page() {
                 </div>
               )}
             </div>
+
             <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <div className="size-7 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-[10px] font-semibold text-primary">
-                  {userEmail?.charAt(0).toUpperCase() ?? "?"}
-                </span>
+
+            <div className="flex items-center gap-2.5">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={displayName}
+                  className="size-7 rounded-full object-cover"
+                />
+              ) : (
+                <div className="size-7 rounded-full bg-primary/20 flex items-center justify-center">
+                  <span className="text-[10px] font-semibold text-primary">{initials}</span>
+                </div>
+              )}
+              <div className="flex flex-col leading-tight">
+                <span className="text-xs font-medium text-foreground">{displayName}</span>
+                <div className="flex items-center gap-1">
+                  <RoleIcon className="size-2.5 text-muted-foreground" />
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${roleConfig[role].color}`}>
+                    {roleConfig[role].label}
+                  </span>
+                </div>
               </div>
-              <span className="text-xs text-foreground">{userEmail ?? "..."}</span>
             </div>
           </div>
         </header>
