@@ -221,9 +221,24 @@ export function ATSTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cvText, jobRequirements: selectedJob.requirements }),
       })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        alert(`CV analysis failed: ${errorData.error ?? "Unknown error"}`)
+        setAnalyzing(false)
+        return
+      }
+
       const data = await res.json()
+      if (data.error) {
+        alert(`CV analysis error: ${data.error}`)
+        setAnalyzing(false)
+        return
+      }
+
       setAnalyzed(data)
-    } catch (e) {
+    } catch (e: any) {
+      alert(`Network error: ${e?.message ?? "could not reach AI service"}`)
       console.error(e)
     }
     setAnalyzing(false)
@@ -267,9 +282,37 @@ export function ATSTab() {
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => setCvText(ev.target?.result as string ?? "")
-    reader.readAsText(file)
+
+    const ext = file.name.toLowerCase().split(".").pop() ?? ""
+
+    if (ext === "txt" || ext === "text") {
+      const reader = new FileReader()
+      reader.onload = (ev) => setCvText(ev.target?.result as string ?? "")
+      reader.readAsText(file)
+      return
+    }
+
+    if (ext === "docx") {
+      ;(async () => {
+        try {
+          const mammoth = await import("mammoth")
+          const arrayBuffer = await file.arrayBuffer()
+          const result = await mammoth.extractRawText({ arrayBuffer })
+          setCvText(result.value)
+        } catch (err) {
+          alert("Could not parse .docx file. Please save as .txt and try again.")
+          console.error(err)
+        }
+      })()
+      return
+    }
+
+    if (ext === "pdf") {
+      alert("PDF support requires conversion. Please open the PDF, select all text (Ctrl+A), copy, and paste into the CV text area.")
+      return
+    }
+
+    alert(`File type ".${ext}" is not supported. Use .txt or .docx, or paste the text directly.`)
   }
 
   const filteredJobs = jobStatusFilter === "all"
@@ -752,9 +795,9 @@ export function ATSTab() {
                   <button onClick={() => fileRef.current?.click()}
                     className="flex items-center justify-center gap-2 py-2.5 border border-dashed border-border rounded-lg text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors">
                     <Upload className="size-3.5" />
-                    Upload .txt file
+                    Upload .txt or .docx file
                   </button>
-                  <input ref={fileRef} type="file" accept=".txt,.text" className="hidden" onChange={handleFileUpload} />
+                  <input ref={fileRef} type="file" accept=".txt,.text,.docx" className="hidden" onChange={handleFileUpload} />
 
                   <button onClick={analyzeCV} disabled={!cvText || analyzing}
                     className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
