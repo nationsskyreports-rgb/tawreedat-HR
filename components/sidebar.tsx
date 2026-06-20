@@ -32,6 +32,7 @@ const navItems = [
   { id: "payroll",       label: "Payroll",         icon: DollarSign },
   { id: "leaves",        label: "Leaves",          icon: CalendarCheck },
   { id: "scheduling",    label: "Shift Roster",    icon: Calendar },
+  { id: "reports",       label: "Reports",         icon: BarChart3 },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
 ]
