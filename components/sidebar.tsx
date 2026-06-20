@@ -9,6 +9,7 @@ import {
   DollarSign,
   FolderKanban,
   Calendar,
+  CalendarCheck,
   Users,
   Bot,
   BarChart3,
@@ -24,14 +25,15 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "checkin", label: "Field Check-In", icon: MapPin },
-  { id: "profitability", label: "Project P&L", icon: BarChart3 },
-  { id: "ats", label: "AI Recruitment", icon: Bot },
-  { id: "payroll", label: "Payroll", icon: DollarSign },
-  { id: "scheduling", label: "Shift Roster", icon: Calendar },
-  { id: "projects", label: "Projects", icon: FolderKanban },
-  { id: "employees", label: "Employees", icon: Users },
+  { id: "overview",      label: "Overview",        icon: LayoutDashboard },
+  { id: "checkin",       label: "Field Check-In",  icon: MapPin },
+  { id: "profitability", label: "Project P&L",     icon: BarChart3 },
+  { id: "ats",           label: "AI Recruitment",  icon: Bot },
+  { id: "payroll",       label: "Payroll",         icon: DollarSign },
+  { id: "leaves",        label: "Leaves",          icon: CalendarCheck },
+  { id: "scheduling",    label: "Shift Roster",    icon: Calendar },
+  { id: "projects",      label: "Projects",        icon: FolderKanban },
+  { id: "employees",     label: "Employees",       icon: Users },
 ]
 
 const bottomItems = [
@@ -59,7 +61,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1">
+      <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1 overflow-y-auto">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-2">
           Modules
         </p>
