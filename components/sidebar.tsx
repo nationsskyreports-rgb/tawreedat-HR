@@ -16,6 +16,8 @@ import {
   Settings,
   ChevronRight,
   Megaphone,
+  FileText,
+  PartyPopper,
   Truck,
 } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
@@ -35,6 +37,8 @@ const navItems = [
   { id: "scheduling",    label: "Shift Roster",    icon: Calendar },
   { id: "reports",       label: "Reports",         icon: BarChart3 },
   { id: "announcements", label: "Announcements",   icon: Megaphone },
+  { id: "documents",     label: "Documents",       icon: FileText },
+  { id: "holidays",      label: "Holidays",        icon: PartyPopper },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
 ]
