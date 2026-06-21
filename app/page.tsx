@@ -15,6 +15,7 @@ import { SettingsTab } from "@/components/settings-tab"
 import { PayrollTab } from "@/components/payroll-tab"
 import { LeavesTab } from "@/components/leaves-tab"
 import { ReportsTab } from "@/components/reports-tab"
+import { AnnouncementsTab } from "@/components/announcements-tab"
 import { Bell, Search, X, Sun, Moon, Shield, Briefcase, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
@@ -96,6 +97,7 @@ export default function Page() {
     payroll: <PayrollTab />,
     leaves: <LeavesTab />,
     reports: <ReportsTab />,
+    announcements: <AnnouncementsTab />,
   }
 
   return (
