@@ -4,11 +4,12 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft, MapPin, Navigation, CheckCircle2, XCircle,
-  Loader2, Clock, LogOut, AlertTriangle, User
+  Loader2, Clock, LogOut, AlertTriangle, User, CalendarClock
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type {
-  Site, Employee, AttendanceLog, AttendanceStatus, CheckinResultType
+  Site, Employee, AttendanceLog, AttendanceStatus, CheckinResultType,
+  ShiftAssignment, Shift
 } from "@/lib/types"
 
 type GeoPosition = { lat: number; lng: number; accuracy: number }
@@ -22,11 +23,18 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
+// Convert "HH:MM:SS" to minutes since midnight
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number)
+  return h * 60 + (m ?? 0)
+}
+
 export default function MobileCheckinPage() {
   const router = useRouter()
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [sites, setSites] = useState<Site[]>([])
   const [todayLogs, setTodayLogs] = useState<AttendanceLog[]>([])
+  const [todayShift, setTodayShift] = useState<{ shift: Shift; assignment: ShiftAssignment } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [selectedSiteId, setSelectedSiteId] = useState<string>("")
@@ -47,8 +55,9 @@ export default function MobileCheckinPage() {
 
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
+    const todayStr = todayStart.toISOString().split("T")[0]
 
-    const [empRes, sitesRes, logsRes] = await Promise.all([
+    const [empRes, sitesRes, logsRes, shiftRes] = await Promise.all([
       supabase.from("employees").select("*").eq("id", profileData.employee_id).single(),
       supabase.from("sites").select("*").eq("is_active", true).order("name"),
       supabase.from("attendance_logs")
@@ -56,14 +65,27 @@ export default function MobileCheckinPage() {
         .eq("employee_id", profileData.employee_id)
         .gte("checkin_at", todayStart.toISOString())
         .order("checkin_at", { ascending: false }),
+      supabase.from("shift_assignments").select("*, shifts(*)")
+        .eq("employee_id", profileData.employee_id)
+        .eq("assignment_date", todayStr).maybeSingle(),
     ])
 
     setEmployee(empRes.data as Employee | null)
     setSites((sitesRes.data ?? []) as Site[])
     setTodayLogs((logsRes.data ?? []) as AttendanceLog[])
 
-    if (empRes.data?.site_id) setSelectedSiteId(empRes.data.site_id)
-    else if (sitesRes.data && sitesRes.data.length > 0) setSelectedSiteId(sitesRes.data[0].id)
+    if (shiftRes.data) {
+      const sd = shiftRes.data as any
+      setTodayShift({ shift: sd.shifts, assignment: sd })
+      // Auto-select shift's site if present
+      if (sd.site_id) setSelectedSiteId(sd.site_id)
+      else if (sd.shifts?.site_id) setSelectedSiteId(sd.shifts.site_id)
+    }
+
+    if (!selectedSiteId) {
+      if (empRes.data?.site_id) setSelectedSiteId(empRes.data.site_id)
+      else if (sitesRes.data && sitesRes.data.length > 0) setSelectedSiteId(sitesRes.data[0].id)
+    }
 
     setLoading(false)
   }
@@ -103,46 +125,118 @@ export default function MobileCheckinPage() {
 
   const existingCheckin = todayLogs.find((l) => !l.checkout_at)
 
+  // Compute shift validation
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  let shiftValidation: {
+    hasShift: boolean
+    isOnTime: boolean
+    isLate: boolean
+    isEarly: boolean
+    lateMinutes: number
+    message: string
+    color: string
+  } = {
+    hasShift: false,
+    isOnTime: false,
+    isLate: false,
+    isEarly: false,
+    lateMinutes: 0,
+    message: "No shift scheduled today",
+    color: "text-muted-foreground",
+  }
+
+  if (todayShift) {
+    const startMin = timeToMinutes(todayShift.shift.start_time)
+    const endMin = timeToMinutes(todayShift.shift.end_time)
+    const grace = todayShift.shift.grace_period_minutes ?? 15
+
+    shiftValidation.hasShift = true
+
+    if (currentMinutes < startMin - 30) {
+      shiftValidation.isEarly = true
+      shiftValidation.message = `Too early. Shift starts at ${todayShift.shift.start_time.slice(0, 5)}.`
+      shiftValidation.color = "text-primary"
+    } else if (currentMinutes <= startMin + grace) {
+      shiftValidation.isOnTime = true
+      shiftValidation.message = `On time! Shift: ${todayShift.shift.start_time.slice(0, 5)}-${todayShift.shift.end_time.slice(0, 5)}`
+      shiftValidation.color = "text-chart-3"
+    } else if (currentMinutes <= endMin) {
+      shiftValidation.isLate = true
+      shiftValidation.lateMinutes = currentMinutes - startMin
+      shiftValidation.message = `Late by ${shiftValidation.lateMinutes} minutes`
+      shiftValidation.color = "text-destructive"
+    } else {
+      shiftValidation.message = `Shift ended at ${todayShift.shift.end_time.slice(0, 5)}`
+      shiftValidation.color = "text-destructive"
+    }
+  }
+
   async function handleCheckIn() {
     if (!employee || !selectedSiteId || !position) return
     setSubmitting(true); setResultMsg(null)
 
     let checkinResult: CheckinResultType = "success"
     let status: AttendanceStatus = "present"
+    let lateMinutes = 0
 
     if (withinGeofence === false) {
       checkinResult = "failed_geofence"
       status = "absent"
+    } else if (shiftValidation.isLate) {
+      status = "late"
+      lateMinutes = shiftValidation.lateMinutes
     }
 
     const { error } = await supabase.from("attendance_logs").insert({
-      employee_id: employee.id, site_id: selectedSiteId,
+      employee_id: employee.id,
+      site_id: selectedSiteId,
       checkin_at: new Date().toISOString(),
-      lat: position.lat, lng: position.lng,
-      status, checkin_result: checkinResult,
+      lat: position.lat,
+      lng: position.lng,
+      status,
+      checkin_result: checkinResult,
+      late_minutes: lateMinutes,
       checkin_method: "mobile",
-      device_info: { accuracy_meters: Math.round(position.accuracy), user_agent: navigator.userAgent },
+      device_info: {
+        accuracy_meters: Math.round(position.accuracy),
+        user_agent: navigator.userAgent,
+        shift_id: todayShift?.shift.id ?? null,
+      },
     })
 
     setSubmitting(false)
 
     if (error) { setResultMsg({ ok: false, text: error.message }); return }
 
-    setResultMsg({
-      ok: checkinResult === "success",
-      text: checkinResult === "success"
-        ? "Check-in successful!"
-        : `Recorded but outside geofence (${Math.round(distance ?? 0)}m away)`,
-    })
+    let msg = "Check-in successful!"
+    if (checkinResult === "failed_geofence") {
+      msg = `Recorded but outside geofence (${Math.round(distance ?? 0)}m away)`
+    } else if (status === "late") {
+      msg = `Checked in — late by ${lateMinutes} min`
+    }
 
+    setResultMsg({ ok: checkinResult === "success", text: msg })
     setPosition(null)
     await loadData()
   }
 
-  async function handleCheckOut(logId: string) {
+  async function handleCheckOut(logId: string, checkinAt: string) {
     if (!confirm("Confirm check-out?")) return
+
+    // Compute overtime if applicable
+    let overtimeMinutes = 0
+    if (todayShift) {
+      const endMin = timeToMinutes(todayShift.shift.end_time)
+      const nowMin = currentMinutes
+      if (nowMin > endMin) overtimeMinutes = nowMin - endMin
+    }
+
     const { error } = await supabase.from("attendance_logs")
-      .update({ checkout_at: new Date().toISOString() })
+      .update({
+        checkout_at: new Date().toISOString(),
+        overtime_minutes: overtimeMinutes,
+      })
       .eq("id", logId)
     if (error) return alert(error.message)
     await loadData()
@@ -177,7 +271,38 @@ export default function MobileCheckinPage() {
 
       <main className="flex-1 overflow-y-auto overscroll-contain">
         <div className="px-4 py-3 space-y-3">
-          {/* Site */}
+
+          {/* Shift Card */}
+          <div className={`rounded-2xl p-4 border ${
+            shiftValidation.hasShift
+              ? shiftValidation.isOnTime
+                ? "bg-chart-3/5 border-chart-3/30"
+                : shiftValidation.isLate
+                  ? "bg-destructive/5 border-destructive/30"
+                  : "bg-primary/5 border-primary/30"
+              : "bg-card border-border"
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarClock className={`size-4 ${shiftValidation.color}`} />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Your Shift Today</p>
+            </div>
+
+            {todayShift ? (
+              <>
+                <p className="text-sm font-semibold text-foreground">{todayShift.shift.name}</p>
+                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                  {todayShift.shift.start_time.slice(0, 5)} – {todayShift.shift.end_time.slice(0, 5)}
+                </p>
+                <p className={`text-xs font-medium mt-2 ${shiftValidation.color}`}>
+                  {shiftValidation.message}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No shift assigned for today. Contact your supervisor.</p>
+            )}
+          </div>
+
+          {/* Site selector */}
           <div className="bg-card border border-border rounded-2xl p-4">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Site</p>
             <select
@@ -194,7 +319,6 @@ export default function MobileCheckinPage() {
             </select>
           </div>
 
-          {/* Existing check-in warning */}
           {existingCheckin && (
             <div className="bg-primary/10 border border-primary/30 rounded-2xl p-3 flex items-start gap-2.5">
               <AlertTriangle className="size-4 text-primary mt-0.5 shrink-0" />
@@ -298,7 +422,8 @@ export default function MobileCheckinPage() {
                   const site = sites.find(s => s.id === log.site_id)
                   const isCheckedOut = !!log.checkout_at
                   const statusColor =
-                    log.checkin_result === "success" ? "bg-chart-3/15 text-chart-3"
+                    log.status === "late" ? "bg-destructive/15 text-destructive"
+                    : log.checkin_result === "success" ? "bg-chart-3/15 text-chart-3"
                     : log.checkin_result === "failed_geofence" ? "bg-destructive/15 text-destructive"
                     : "bg-primary/15 text-primary"
 
@@ -317,16 +442,20 @@ export default function MobileCheckinPage() {
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-muted-foreground truncate">{site?.name ?? "—"}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {site?.name ?? "—"}
+                            {(log.late_minutes ?? 0) > 0 && <span className="text-destructive ml-1">· Late {log.late_minutes}m</span>}
+                            {(log.overtime_minutes ?? 0) > 0 && <span className="text-chart-3 ml-1">· OT {log.overtime_minutes}m</span>}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColor}`}>
-                          {log.checkin_result?.replace("_", " ") ?? log.status}
+                          {log.status === "late" ? "late" : log.checkin_result?.replace("_", " ") ?? log.status}
                         </span>
                         {!isCheckedOut && (
                           <button
-                            onClick={() => handleCheckOut(log.id)}
+                            onClick={() => handleCheckOut(log.id, log.checkin_at)}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] bg-secondary text-foreground rounded active:bg-secondary/60"
                           >
                             <LogOut className="size-2.5" />Out
