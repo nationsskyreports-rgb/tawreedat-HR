@@ -1,11 +1,15 @@
 "use client"
 
 import { supabase } from "@/lib/supabase"
+import { hasBiometricSession } from "@/lib/webauthn"
 import { LogOut } from "lucide-react"
 
 export function LogoutButton() {
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    // If biometric is enabled → local logout only (keeps refresh token valid for biometric re-login)
+    // If no biometric → full server logout
+    const scope = hasBiometricSession() ? "local" : "global"
+    await supabase.auth.signOut({ scope })
     window.location.href = "/login"
   }
 
