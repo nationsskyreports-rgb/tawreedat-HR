@@ -73,7 +73,7 @@ export default function MobileProfilePage() {
   }
 
   async function logout() {
-    await supabase.auth.signOut()
+    const _scope = (typeof window !== "undefined" && localStorage.getItem("tawreedat_biometric_session")) ? "local" : "global"; await supabase.auth.signOut({ scope: _scope as any })
     router.push("/login")
   }
 
