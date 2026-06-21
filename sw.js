@@ -1,73 +1,113 @@
 // Tawreedat HRIS — Service Worker
-// Cache version — bump when you deploy new changes
-const CACHE_VERSION = "v1"
+// ⚠️ Bump CACHE_VERSION on every deployment
+const CACHE_VERSION = "v3"
 const CACHE_NAME = `tawreedat-${CACHE_VERSION}`
 
 const STATIC_ASSETS = [
-  "/m",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
+  "/apple-icon.png",
+  "/favicon.ico",
 ]
 
-// Install — cache static assets
+const MOBILE_ROUTES = [
+  "/m",
+  "/m/checkin",
+  "/m/leave",
+  "/m/payslip",
+  "/m/profile",
+  "/login",
+]
+
+const ALL_CACHED = [...STATIC_ASSETS, ...MOBILE_ROUTES]
+
+// Install — cache everything
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ALL_CACHED).catch((err) => {
+        console.warn("[SW] Some assets failed to cache:", err)
+      })
+    })
   )
   self.skipWaiting()
 })
 
-// Activate — clean old caches
+// Activate — remove old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys
           .filter((k) => k.startsWith("tawreedat-") && k !== CACHE_NAME)
-          .map((k) => caches.delete(k))
+          .map((k) => {
+            console.log("[SW] Deleting old cache:", k)
+            return caches.delete(k)
+          })
       )
     )
   )
   self.clients.claim()
 })
 
-// Fetch — network-first for API, cache-first for static
+// Fetch strategy:
+// - API routes / Supabase → Network only (never cache)
+// - Static assets → Cache first
+// - Pages → Network first, fallback to cache
 self.addEventListener("fetch", (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Skip non-GET and external requests
+  // Skip non-GET
   if (request.method !== "GET") return
+
+  // Skip external (Supabase, fonts, etc.)
   if (url.origin !== self.location.origin) return
 
-  // Skip Supabase, Next.js internals, API routes — network only
+  // Skip Next.js internals and API routes → always network
   if (
-    url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/_next/") ||
-    url.hostname.includes("supabase")
-  ) {
+    url.pathname.startsWith("/api/")
+  ) return
+
+  // Static files (icons, manifest) → cache first
+  const isStatic = STATIC_ASSETS.some(
+    (a) => url.pathname === a || url.pathname.startsWith("/_next/static/")
+  )
+
+  if (isStatic) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) => cached || fetch(request).then((res) => {
+          if (res.status === 200) {
+            caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()))
+          }
+          return res
+        })
+      )
+    )
     return
   }
 
-  // Cache-first for static assets
+  // Pages → Network first, fallback to cache, then offline page
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached
-      return fetch(request).then((response) => {
-        // Only cache successful responses
-        if (response.status === 200) {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+    fetch(request)
+      .then((res) => {
+        if (res.status === 200) {
+          caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()))
         }
-        return response
-      }).catch(() => {
-        // Offline fallback for navigation requests
-        if (request.mode === "navigate") {
-          return caches.match("/m")
-        }
-        return new Response("Offline", { status: 503 })
+        return res
       })
-    })
+      .catch(() => {
+        return caches.match(request).then((cached) => {
+          if (cached) return cached
+          // Offline fallback
+          if (request.mode === "navigate") {
+            return caches.match("/m") || caches.match("/login")
+          }
+          return new Response("Offline", { status: 503 })
+        })
+      })
   )
 })
