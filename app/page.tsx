@@ -68,7 +68,14 @@ export default function Page() {
         .eq("id", user.id)
         .single()
 
-      if (profileData) setProfile(profileData as Profile)
+      if (profileData) {
+        setProfile(profileData as Profile)
+
+        // Auto-redirect: employees go to mobile view
+        if (profileData.role === "employee") {
+          window.location.href = "/m"
+        }
+      }
     }
 
     loadUser()
