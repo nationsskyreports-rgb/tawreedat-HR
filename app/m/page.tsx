@@ -3,17 +3,22 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Home, MapPin, Calendar, Wallet, User,
-  LogOut, Bell, ChevronRight, Loader2,
-  CheckCircle2, Clock, Briefcase, Megaphone, FileText, CalendarCheck
+  Home, MapPin, Wallet, User, LogOut, Loader2,
+  CheckCircle2, Clock, Briefcase, Megaphone, FileText, CalendarCheck,
+  Download
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type {
-  Profile, Employee, AttendanceLog, LeaveRequest,
-  LeaveBalance, Announcement, ShiftAssignment, Shift
+  Profile, Employee, AttendanceLog, ShiftAssignment, Shift
 } from "@/lib/types"
 
 type Section = "home" | "checkin" | "leave" | "payslip" | "profile"
+
+// BeforeInstallPromptEvent (PWA install prompt)
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+}
 
 export default function MobileHomePage() {
   const router = useRouter()
@@ -27,6 +32,35 @@ export default function MobileHomePage() {
   const [pendingLeaves, setPendingLeaves] = useState(0)
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0)
 
+  // Install prompt
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [isInstalled, setIsInstalled] = useState(false)
+
+  useEffect(() => {
+    // Check if running as installed PWA
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true)
+    }
+
+    function handleBeforeInstallPrompt(e: Event) {
+      e.preventDefault()
+      setInstallPrompt(e as InstallPromptEvent)
+    }
+
+    function handleAppInstalled() {
+      setIsInstalled(true)
+      setInstallPrompt(null)
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    window.addEventListener("appinstalled", handleAppInstalled)
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+      window.removeEventListener("appinstalled", handleAppInstalled)
+    }
+  }, [])
+
   async function loadData() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +69,6 @@ export default function MobileHomePage() {
       return
     }
 
-    // Load profile
     const { data: profileData } = await supabase
       .from("profiles")
       .select("*")
@@ -48,7 +81,6 @@ export default function MobileHomePage() {
       return
     }
 
-    // Load employee linked to this user
     const { data: empData } = await supabase
       .from("employees")
       .select("*")
@@ -60,6 +92,7 @@ export default function MobileHomePage() {
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
       const todayStr = todayStart.toISOString().split("T")[0]
+      const nowISO = new Date().toISOString()
 
       const [checkinRes, leavesRes, shiftRes, annRes] = await Promise.all([
         supabase.from("attendance_logs")
@@ -80,8 +113,8 @@ export default function MobileHomePage() {
           .maybeSingle(),
         supabase.from("announcements")
           .select("id", { count: "exact", head: true })
-          .lte("publish_at", new Date().toISOString())
-          .or("expires_at.is.null,expires_at.gt." + new Date().toISOString()),
+          .lte("publish_at", nowISO)
+          .or(`expires_at.is.null,expires_at.gt.${nowISO}`),
       ])
 
       setTodayCheckin(checkinRes.data as AttendanceLog | null)
@@ -104,24 +137,36 @@ export default function MobileHomePage() {
     router.push("/login")
   }
 
+  async function triggerInstall() {
+    if (!installPrompt) {
+      alert(
+        "To install: tap your browser's Share/Menu button, then choose 'Add to Home Screen' or 'Install app'."
+      )
+      return
+    }
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === "accepted") {
+      setInstallPrompt(null)
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <Loader2 className="size-5 animate-spin mr-2" />
         Loading...
       </div>
     )
   }
 
-  // If user is admin/hr/manager, suggest using desktop
   if (profile && ["admin", "hr", "manager"].includes(profile.role)) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <Briefcase className="size-12 text-primary mb-4" />
         <h1 className="text-lg font-semibold text-foreground mb-2">Admin Account</h1>
         <p className="text-sm text-muted-foreground mb-6">
           You're logged in as <strong>{profile.role}</strong>. The mobile app is for employees.
-          Please use the desktop view for full access.
         </p>
         <button onClick={() => router.push("/")}
           className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
@@ -136,7 +181,7 @@ export default function MobileHomePage() {
 
   if (!employee) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <User className="size-12 text-muted-foreground mb-4" />
         <h1 className="text-lg font-semibold text-foreground mb-2">No Profile Linked</h1>
         <p className="text-sm text-muted-foreground mb-6">
@@ -150,25 +195,34 @@ export default function MobileHomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-16">
+    <>
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary">
+      <header className="shrink-0 bg-card border-b border-border px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="size-9 rounded-full bg-primary/15 flex items-center justify-center text-sm font-semibold text-primary shrink-0">
             {employee.full_name.charAt(0).toUpperCase()}
           </div>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-foreground truncate max-w-[180px]">{employee.full_name}</p>
+          <div className="leading-tight min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">{employee.full_name}</p>
             <p className="text-[10px] text-muted-foreground font-mono">{employee.employee_no}</p>
           </div>
         </div>
-        <button onClick={logout} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
-          <LogOut className="size-4" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isInstalled && installPrompt && (
+            <button onClick={triggerInstall}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary text-[10px] font-medium rounded-lg">
+              <Download className="size-3" />
+              Install
+            </button>
+          )}
+          <button onClick={logout} className="p-2 text-muted-foreground active:text-destructive transition-colors">
+            <LogOut className="size-4" />
+          </button>
+        </div>
       </header>
 
-      {/* Section content */}
-      <main className="flex-1 overflow-y-auto">
+      {/* Section content — scrollable middle area */}
+      <main className="flex-1 overflow-y-auto overscroll-contain">
         {section === "home" && (
           <HomeSection
             employee={employee}
@@ -176,6 +230,9 @@ export default function MobileHomePage() {
             todayShift={todayShift}
             pendingLeaves={pendingLeaves}
             unreadAnnouncements={unreadAnnouncements}
+            isInstalled={isInstalled}
+            canInstall={!!installPrompt}
+            onInstall={triggerInstall}
             onCheckIn={() => setSection("checkin")}
             onLeave={() => setSection("leave")}
             onPayslip={() => setSection("payslip")}
@@ -184,11 +241,11 @@ export default function MobileHomePage() {
         {section === "checkin"  && <ComingSoon title="Check-In" />}
         {section === "leave"    && <ComingSoon title="Leave Requests" />}
         {section === "payslip"  && <ComingSoon title="Payslip" />}
-        {section === "profile"  && <ProfileSection employee={employee} profile={profile} />}
+        {section === "profile"  && <ProfileSection employee={employee} />}
       </main>
 
-      {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30">
+      {/* Bottom navigation — pinned */}
+      <nav className="shrink-0 bg-card border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="grid grid-cols-5">
           {[
             { id: "home",    label: "Home",     icon: Home },
@@ -203,7 +260,7 @@ export default function MobileHomePage() {
               <button
                 key={item.id}
                 onClick={() => setSection(item.id as Section)}
-                className="flex flex-col items-center justify-center py-2 gap-0.5 transition-colors"
+                className="flex flex-col items-center justify-center py-2 gap-0.5 transition-colors active:bg-secondary/30"
               >
                 <Icon className={`size-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                 <span className={`text-[10px] ${isActive ? "text-primary font-medium" : "text-muted-foreground"}`}>
@@ -214,7 +271,7 @@ export default function MobileHomePage() {
           })}
         </div>
       </nav>
-    </div>
+    </>
   )
 }
 
@@ -223,6 +280,7 @@ export default function MobileHomePage() {
 // =============================================================================
 function HomeSection({
   employee, todayCheckin, todayShift, pendingLeaves, unreadAnnouncements,
+  isInstalled, canInstall, onInstall,
   onCheckIn, onLeave, onPayslip,
 }: {
   employee: Employee
@@ -230,6 +288,9 @@ function HomeSection({
   todayShift: { shift: Shift; assignment: ShiftAssignment } | null
   pendingLeaves: number
   unreadAnnouncements: number
+  isInstalled: boolean
+  canInstall: boolean
+  onInstall: () => void
   onCheckIn: () => void
   onLeave: () => void
   onPayslip: () => void
@@ -239,7 +300,23 @@ function HomeSection({
   const firstName = employee.full_name.split(" ")[0]
 
   return (
-    <div className="px-4 py-4 space-y-4">
+    <div className="px-4 py-3 space-y-3">
+      {/* Install banner */}
+      {!isInstalled && (
+        <button onClick={onInstall}
+          className="w-full bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-center gap-3 active:bg-primary/15 transition-colors">
+          <div className="size-9 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+            <Download className="size-4 text-primary" />
+          </div>
+          <div className="text-left flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground">Install Tawreedat</p>
+            <p className="text-[10px] text-muted-foreground">
+              {canInstall ? "Tap to install on your device" : "Use your browser's Share menu → Add to Home Screen"}
+            </p>
+          </div>
+        </button>
+      )}
+
       <div>
         <p className="text-xs text-muted-foreground">{greeting},</p>
         <p className="text-lg font-semibold text-foreground">{firstName} 👋</p>
@@ -250,8 +327,8 @@ function HomeSection({
 
       {/* Today's Status Card */}
       <div className="bg-card border border-border rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Today's Status</p>
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Today</p>
           {todayCheckin ? (
             <span className="flex items-center gap-1 text-[10px] text-chart-3">
               <CheckCircle2 className="size-3" /> Checked in
@@ -264,21 +341,21 @@ function HomeSection({
         </div>
 
         {todayShift ? (
-          <div className="bg-secondary/40 rounded-xl p-3 mb-3">
-            <p className="text-[10px] text-muted-foreground uppercase">Your shift today</p>
-            <p className="text-sm font-medium text-foreground mt-0.5">
-              {todayShift.shift.name}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {todayShift.shift.start_time.slice(0, 5)} – {todayShift.shift.end_time.slice(0, 5)}
-            </p>
+          <div className="bg-secondary/40 rounded-xl px-3 py-2.5 mb-3">
+            <p className="text-[9px] text-muted-foreground uppercase">Your shift</p>
+            <div className="flex items-baseline justify-between mt-0.5">
+              <p className="text-sm font-medium text-foreground">{todayShift.shift.name}</p>
+              <p className="text-[11px] text-muted-foreground font-mono">
+                {todayShift.shift.start_time.slice(0, 5)} – {todayShift.shift.end_time.slice(0, 5)}
+              </p>
+            </div>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground italic mb-3">No shift scheduled today</p>
         )}
 
         {todayCheckin ? (
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs px-1">
             <span className="text-muted-foreground">Checked in at</span>
             <span className="font-mono font-semibold text-foreground">
               {new Date(todayCheckin.checkin_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
@@ -286,7 +363,7 @@ function HomeSection({
           </div>
         ) : (
           <button onClick={onCheckIn}
-            className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+            className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold active:bg-primary/90 transition-colors flex items-center justify-center gap-2">
             <MapPin className="size-4" />
             Check In Now
           </button>
@@ -294,37 +371,15 @@ function HomeSection({
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <QuickAction
-          icon={CalendarCheck}
-          label="Request Leave"
-          sublabel={`${pendingLeaves} pending`}
-          color="text-chart-2"
-          bg="bg-chart-2/10"
-          onClick={onLeave}
-        />
-        <QuickAction
-          icon={Wallet}
-          label="My Payslip"
-          sublabel="View latest"
-          color="text-chart-3"
-          bg="bg-chart-3/10"
-          onClick={onPayslip}
-        />
-        <QuickAction
-          icon={Megaphone}
-          label="Announcements"
-          sublabel={`${unreadAnnouncements} active`}
-          color="text-chart-4"
-          bg="bg-chart-4/10"
-        />
-        <QuickAction
-          icon={FileText}
-          label="Documents"
-          sublabel="View your files"
-          color="text-primary"
-          bg="bg-primary/10"
-        />
+      <div className="grid grid-cols-2 gap-2.5">
+        <QuickAction icon={CalendarCheck} label="Request Leave" sublabel={`${pendingLeaves} pending`}
+          color="text-chart-2" bg="bg-chart-2/10" onClick={onLeave} />
+        <QuickAction icon={Wallet} label="My Payslip" sublabel="View latest"
+          color="text-chart-3" bg="bg-chart-3/10" onClick={onPayslip} />
+        <QuickAction icon={Megaphone} label="Announcements" sublabel={`${unreadAnnouncements} active`}
+          color="text-chart-4" bg="bg-chart-4/10" />
+        <QuickAction icon={FileText} label="Documents" sublabel="View your files"
+          color="text-primary" bg="bg-primary/10" />
       </div>
     </div>
   )
@@ -341,15 +396,13 @@ function QuickAction({
   onClick?: () => void
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="bg-card border border-border rounded-2xl p-3.5 text-left active:bg-secondary/30 transition-colors"
-    >
-      <div className={`size-10 rounded-xl ${bg} flex items-center justify-center mb-2`}>
+    <button onClick={onClick}
+      className="bg-card border border-border rounded-2xl p-3 text-left active:bg-secondary/30 transition-colors">
+      <div className={`size-9 rounded-xl ${bg} flex items-center justify-center mb-2`}>
         <Icon className={`size-4 ${color}`} />
       </div>
-      <p className="text-xs font-semibold text-foreground">{label}</p>
-      <p className="text-[10px] text-muted-foreground mt-0.5">{sublabel}</p>
+      <p className="text-xs font-semibold text-foreground leading-tight">{label}</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{sublabel}</p>
     </button>
   )
 }
@@ -357,9 +410,9 @@ function QuickAction({
 // =============================================================================
 // Profile Section
 // =============================================================================
-function ProfileSection({ employee, profile }: { employee: Employee; profile: Profile | null }) {
+function ProfileSection({ employee }: { employee: Employee }) {
   return (
-    <div className="px-4 py-4 space-y-4">
+    <div className="px-4 py-3 space-y-3">
       <div className="bg-card border border-border rounded-2xl p-5 text-center">
         <div className="size-20 mx-auto rounded-full bg-primary/15 flex items-center justify-center text-2xl font-bold text-primary mb-3">
           {employee.full_name.charAt(0).toUpperCase()}
@@ -378,7 +431,7 @@ function ProfileSection({ employee, profile }: { employee: Employee; profile: Pr
         <InfoRow label="Status"       value={employee.status ?? "—"} className="capitalize" />
       </div>
 
-      <p className="text-[10px] text-center text-muted-foreground">
+      <p className="text-[10px] text-center text-muted-foreground pb-2">
         To update your info, please contact HR
       </p>
     </div>
@@ -387,9 +440,9 @@ function ProfileSection({ employee, profile }: { employee: Employee; profile: Pr
 
 function InfoRow({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3">
+    <div className="flex items-center justify-between px-4 py-2.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`text-xs text-foreground font-medium ${className ?? ""}`}>{value}</span>
+      <span className={`text-xs text-foreground font-medium truncate max-w-[60%] text-right ${className ?? ""}`}>{value}</span>
     </div>
   )
 }
@@ -399,8 +452,8 @@ function InfoRow({ label, value, className }: { label: string; value: string; cl
 // =============================================================================
 function ComingSoon({ title }: { title: string }) {
   return (
-    <div className="px-4 py-12 text-center">
-      <div className="size-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 text-center">
+      <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
         <Clock className="size-7 text-primary" />
       </div>
       <h2 className="text-base font-semibold text-foreground mb-1">{title}</h2>
