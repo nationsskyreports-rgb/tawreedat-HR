@@ -1,100 +1,153 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { Truck, Eye, EyeOff } from "lucide-react"
+import { Truck, Mail, Lock, Loader2, AlertCircle, Fingerprint, Eye, EyeOff } from "lucide-react"
+import {
+  isBiometricSupported, isPlatformAuthenticatorAvailable,
+  authenticateWithBiometric, hasBiometricSession, getStoredEmail,
+} from "@/lib/webauthn"
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [biometricLoading, setBiometricLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [hasStoredBiometric, setHasStoredBiometric] = useState(false)
 
-  const handleLogin = async () => {
-    setLoading(true)
-    setError("")
-    console.log("Attempting login with:", email)
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
-    console.log("Login result:", { data, error })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    } else {
-      window.location.href = "/"
+  useEffect(() => {
+    async function checkBiometric() {
+      if (!isBiometricSupported()) return
+      const platformAvail = await isPlatformAuthenticatorAvailable()
+      if (!platformAvail) return
+      const stored = hasBiometricSession()
+      setHasStoredBiometric(stored)
+      setBiometricAvailable(true)
+      if (stored) {
+        const storedEmail = getStoredEmail()
+        if (storedEmail) setEmail(storedEmail)
+      }
     }
+    checkBiometric()
+  }, [])
+
+  async function routeAfterLogin() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    if (profile?.role === "employee") router.push("/m")
+    else router.push("/")
+  }
+
+  async function handleEmailLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: email.trim(), password,
+    })
+    setLoading(false)
+    if (signInErr) { setError(signInErr.message); return }
+    await routeAfterLogin()
+  }
+
+  async function handleBiometricLogin() {
+    setError(null)
+    setBiometricLoading(true)
+    const result = await authenticateWithBiometric()
+    setBiometricLoading(false)
+    if (!result.ok) { setError(result.error); return }
+    await routeAfterLogin()
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="size-10 rounded-xl bg-primary flex items-center justify-center">
-            <Truck className="size-5 text-primary-foreground" />
+        <div className="flex flex-col items-center mb-8">
+          <div className="size-14 rounded-2xl bg-primary flex items-center justify-center mb-3">
+            <Truck className="size-7 text-primary-foreground" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Tawreedat</p>
-            <p className="text-xs text-muted-foreground">HRIS Platform</p>
-          </div>
+          <h1 className="text-xl font-semibold text-foreground">Tawreedat HRIS</h1>
+          <p className="text-xs text-muted-foreground mt-1">Sign in to continue</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-4">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Sign in</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Enter your credentials to continue</p>
-          </div>
+        {biometricAvailable && hasStoredBiometric && (
+          <>
+            <button
+              onClick={handleBiometricLogin}
+              disabled={biometricLoading || loading}
+              className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 active:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
+            >
+              {biometricLoading ? (
+                <><Loader2 className="size-5 animate-spin" /> Verifying...</>
+              ) : (
+                <><Fingerprint className="size-5" /> Sign in with Biometric</>
+              )}
+            </button>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[10px] text-muted-foreground uppercase">or</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          </>
+        )}
 
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@tawreedat.com"
-                className="bg-secondary/60 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
+        <form onSubmit={handleEmailLogin} className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-3 py-3 outline-none border border-transparent focus:border-primary"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  className="w-full bg-secondary/60 border border-border rounded-lg px-3 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input type={showPassword ? "text" : "password"} required value={password}
+                onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
+                className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-10 py-3 outline-none border border-transparent focus:border-primary"
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
             </div>
           </div>
 
           {error && (
-            <div className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2 flex flex-col gap-1">
-              <p className="font-medium">Login failed</p>
-              <p>{error}</p>
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs">
+              <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <button
-            onClick={handleLogin}
-            disabled={loading || !email || !password}
-            className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          <button type="submit" disabled={loading || biometricLoading}
+            className="w-full py-3 bg-foreground text-background rounded-xl text-sm font-semibold hover:opacity-90 active:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading && <Loader2 className="size-4 animate-spin" />}
+            Sign in
           </button>
-        </div>
+        </form>
+
+        {biometricAvailable && !hasStoredBiometric && (
+          <p className="text-[11px] text-muted-foreground text-center mt-6">
+            💡 Sign in once, then enable <strong>Fingerprint / Face ID</strong> from your profile for faster access.
+          </p>
+        )}
+
+        <p className="text-[10px] text-muted-foreground text-center mt-8">
+          Tawreedat HRIS · Logistics HR Platform
+        </p>
       </div>
     </div>
   )
