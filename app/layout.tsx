@@ -13,6 +13,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Tawreedat HRIS — Logistics HR Platform',
   description: 'AI-driven HRIS for logistics and supply chain operations in Egypt and the Middle East.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Tawreedat',
+  },
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-icon.png',
@@ -21,9 +27,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
+    { media: '(prefers-color-scheme: light)', color: '#f97316' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
   ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
