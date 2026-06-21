@@ -15,6 +15,7 @@ import {
   BarChart3,
   Settings,
   ChevronRight,
+  Megaphone,
   Truck,
 } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
@@ -33,6 +34,7 @@ const navItems = [
   { id: "leaves",        label: "Leaves",          icon: CalendarCheck },
   { id: "scheduling",    label: "Shift Roster",    icon: Calendar },
   { id: "reports",       label: "Reports",         icon: BarChart3 },
+  { id: "announcements", label: "Announcements",   icon: Megaphone },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
 ]
