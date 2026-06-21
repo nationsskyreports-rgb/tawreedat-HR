@@ -2,15 +2,20 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const MOBILE_PATHS = ["/m", "/m/checkin", "/m/leave", "/m/payslip", "/m/profile"]
-const PUBLIC_PATHS = ["/login"]
-const STATIC_PATHS = ["/_next", "/favicon", "/icon-", "/apple-", "/manifest", "/sw.js"]
+function isMobileDevice(request: NextRequest): boolean {
+  const ua = request.headers.get("user-agent") ?? ""
+  return /android|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua)
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip static assets and public files
-  if (STATIC_PATHS.some(p => pathname.startsWith(p))) {
+  // Skip static files completely
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.match(/\.(png|ico|jpg|svg|js|css|json|txt|woff|woff2)$/)
+  ) {
     return NextResponse.next()
   }
 
@@ -33,38 +38,31 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Not logged in → redirect to login (except if already on login)
+  // Not logged in
   if (!user) {
     if (pathname === "/login") return response
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // Logged in → get role from profiles
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single()
+  // Logged in on login page → redirect based on device
+  if (pathname === "/login") {
+    const mobile = isMobileDevice(request)
+    return NextResponse.redirect(
+      new URL(mobile ? "/m" : "/", request.url)
+    )
+  }
 
-  const role = profile?.role ?? "employee"
+  const mobile = isMobileDevice(request)
   const isMobilePath = pathname.startsWith("/m")
-  const isDesktopRoot = pathname === "/"
+  const isDesktopPath = pathname === "/" || (!isMobilePath && pathname !== "/login")
 
-  // Employee on desktop root → redirect to mobile
-  if (role === "employee" && isDesktopRoot) {
+  // Mobile device on desktop → go to /m
+  if (mobile && isDesktopPath) {
     return NextResponse.redirect(new URL("/m", request.url))
   }
 
-  // Admin/HR/Manager on mobile paths → redirect to desktop
-  if (["admin", "hr", "manager"].includes(role) && isMobilePath) {
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
-  // Already on login page but logged in
-  if (pathname === "/login") {
-    if (role === "employee") {
-      return NextResponse.redirect(new URL("/m", request.url))
-    }
+  // Desktop browser on /m → go to desktop
+  if (!mobile && isMobilePath) {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
@@ -72,5 +70,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|.*\\.png$|.*\\.ico$|.*\\.js$|.*\\.json$).*)"],
+  matcher: ["/((?!_next/static|_next/image).*)"],
 }
