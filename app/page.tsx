@@ -16,6 +16,8 @@ import { PayrollTab } from "@/components/payroll-tab"
 import { LeavesTab } from "@/components/leaves-tab"
 import { ReportsTab } from "@/components/reports-tab"
 import { AnnouncementsTab } from "@/components/announcements-tab"
+import { DocumentsTab } from "@/components/documents-tab"
+import { HolidaysTab } from "@/components/holidays-tab"
 import { Bell, Search, X, Sun, Moon, Shield, Briefcase, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
@@ -98,6 +100,8 @@ export default function Page() {
     leaves: <LeavesTab />,
     reports: <ReportsTab />,
     announcements: <AnnouncementsTab />,
+    documents: <DocumentsTab />,
+    holidays: <HolidaysTab />,
   }
 
   return (
