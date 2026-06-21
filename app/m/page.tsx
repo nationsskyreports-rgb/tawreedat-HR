@@ -208,7 +208,7 @@ export default function MobileHomePage() {
                   color="text-chart-4" bg="bg-chart-4/10" onClick={() => window.location.href = "/"} />
               </div>
               <p className="text-[10px] text-muted-foreground text-center mt-3">
-                Tap any item to open the full desktop view →
+                Tap any item to switch to Desktop view
               </p>
             </div>
           )}
