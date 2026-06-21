@@ -10,7 +10,7 @@ function isMobileDevice(request: NextRequest): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Skip static files completely
+  // Skip static files
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
@@ -46,18 +46,18 @@ export async function middleware(request: NextRequest) {
 
   // Logged in on login page → redirect based on device
   if (pathname === "/login") {
-    const mobile = isMobileDevice(request)
-    return NextResponse.redirect(
-      new URL(mobile ? "/m" : "/", request.url)
-    )
+    const preferDesktop = request.cookies.get("prefer_desktop")?.value === "1"
+    const mobile = isMobileDevice(request) && !preferDesktop
+    return NextResponse.redirect(new URL(mobile ? "/m" : "/", request.url))
   }
 
-  const mobile = isMobileDevice(request)
+  // Check if user chose to stay on desktop (cookie set by "Switch to Desktop" button)
+  const preferDesktop = request.cookies.get("prefer_desktop")?.value === "1"
+  const mobile = isMobileDevice(request) && !preferDesktop
   const isMobilePath = pathname.startsWith("/m")
-  const isDesktopPath = pathname === "/" || (!isMobilePath && pathname !== "/login")
 
-  // Mobile device on desktop → go to /m
-  if (mobile && isDesktopPath) {
+  // Mobile device on desktop → go to /m (unless they prefer desktop)
+  if (mobile && !isMobilePath) {
     return NextResponse.redirect(new URL("/m", request.url))
   }
 
