@@ -18,6 +18,7 @@ import {
   Megaphone,
   FileText,
   PartyPopper,
+  Star,
   Truck,
 } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
@@ -39,6 +40,7 @@ const navItems = [
   { id: "announcements", label: "Announcements",   icon: Megaphone },
   { id: "documents",     label: "Documents",       icon: FileText },
   { id: "holidays",      label: "Holidays",        icon: PartyPopper },
+  { id: "performance",   label: "Performance",     icon: Star },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
 ]
