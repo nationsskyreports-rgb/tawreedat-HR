@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import {
   isBiometricSupported, isPlatformAuthenticatorAvailable,
-  authenticateWithBiometric, hasBiometricSession, getStoredEmail,
+  getCredentialsViaBiometric, hasBiometricSession, getStoredEmail,
 } from "@/lib/webauthn"
 
 type Tab = "signin" | "signup"
@@ -32,15 +32,12 @@ function LoginPageInner() {
   const urlError = searchParams.get("error")
 
   const [tab, setTab] = useState<Tab>("signin")
-
-  // Sign in state
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(urlError)
 
-  // Sign up state
   const [signupEmail, setSignupEmail] = useState("")
   const [signupFullName, setSignupFullName] = useState("")
   const [signupEmployeeNo, setSignupEmployeeNo] = useState("")
@@ -51,7 +48,6 @@ function LoginPageInner() {
   const [signupError, setSignupError] = useState<string | null>(null)
   const [signupDone, setSignupDone] = useState(false)
 
-  // Biometric
   const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [hasStoredBiometric, setHasStoredBiometric] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
@@ -89,6 +85,35 @@ function LoginPageInner() {
     routeAfterLogin()
   }
 
+  async function handleBiometricLogin() {
+    setError(null)
+    setBiometricLoading(true)
+
+    // Step 1: verify biometric → get credentials
+    const result = await getCredentialsViaBiometric()
+
+    if (!result.ok) {
+      setBiometricLoading(false)
+      setError(result.error)
+      return
+    }
+
+    // Step 2: sign in normally with the stored credentials
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: result.email,
+      password: result.password,
+    })
+
+    setBiometricLoading(false)
+
+    if (signInErr) {
+      setError("Biometric login failed. Please sign in with email/password.")
+      return
+    }
+
+    routeAfterLogin()
+  }
+
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault()
     setSignupError(null)
@@ -114,21 +139,8 @@ function LoginPageInner() {
 
     setSignupLoading(false)
 
-    if (err) {
-      setSignupError(err.message)
-      return
-    }
-
+    if (err) { setSignupError(err.message); return }
     setSignupDone(true)
-  }
-
-  async function handleBiometricLogin() {
-    setError(null)
-    setBiometricLoading(true)
-    const result = await authenticateWithBiometric()
-    setBiometricLoading(false)
-    if (!result.ok) { setError(result.error); return }
-    routeAfterLogin()
   }
 
   return (
@@ -146,38 +158,25 @@ function LoginPageInner() {
 
         {/* Tabs */}
         <div className="flex bg-secondary/60 rounded-xl p-1 mb-6">
-          <button
-            onClick={() => { setTab("signin"); setError(null) }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === "signin"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => { setTab("signup"); setSignupError(null); setSignupDone(false) }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === "signup"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Create Account
-          </button>
+          {(["signin", "signup"] as Tab[]).map(t => (
+            <button key={t}
+              onClick={() => { setTab(t); setError(null); setSignupError(null); setSignupDone(false) }}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+                tab === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "signin" ? "Sign In" : "Create Account"}
+            </button>
+          ))}
         </div>
 
-        {/* ── SIGN IN ── */}
+        {/* SIGN IN */}
         {tab === "signin" && (
           <div className="space-y-4">
             {biometricAvailable && hasStoredBiometric && (
               <>
-                <button
-                  onClick={handleBiometricLogin}
-                  disabled={biometricLoading || loading}
-                  className="w-full py-3.5 bg-primary text-primary-foreground rounded-2xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2 shadow-md shadow-primary/20"
-                >
+                <button onClick={handleBiometricLogin} disabled={biometricLoading || loading}
+                  className="w-full py-3.5 bg-primary text-primary-foreground rounded-2xl text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2 shadow-md shadow-primary/20">
                   {biometricLoading
                     ? <><Loader2 className="size-5 animate-spin" /> Verifying...</>
                     : <><Fingerprint className="size-5" /> Sign in with Biometric</>
@@ -196,13 +195,9 @@ function LoginPageInner() {
                 <label htmlFor="email" className="text-xs font-medium text-muted-foreground">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  <input
-                    id="email" type="email" name="email" required
-                    autoComplete="username email"
-                    value={email} onChange={e => setEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary transition-colors"
-                  />
+                  <input id="email" type="email" name="email" required autoComplete="username email"
+                    value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com"
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary transition-colors" />
                 </div>
               </div>
 
@@ -210,13 +205,10 @@ function LoginPageInner() {
                 <label htmlFor="password" className="text-xs font-medium text-muted-foreground">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                  <input
-                    id="password" type={showPassword ? "text" : "password"} name="password" required
+                  <input id="password" type={showPassword ? "text" : "password"} name="password" required
                     autoComplete="current-password"
-                    value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-12 py-3 outline-none border border-transparent focus:border-primary transition-colors"
-                  />
+                    value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-12 py-3 outline-none border border-transparent focus:border-primary transition-colors" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" tabIndex={-1}>
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -242,14 +234,14 @@ function LoginPageInner() {
               <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex items-start gap-2">
                 <ShieldCheck className="size-4 text-primary shrink-0 mt-0.5" />
                 <p className="text-[11px] text-muted-foreground">
-                  Enable <strong className="text-foreground">Fingerprint / Face ID</strong> from your profile for faster sign-in.
+                  Enable <strong className="text-foreground">Fingerprint / Face ID</strong> from your Profile after signing in.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* ── SIGN UP ── */}
+        {/* SIGN UP */}
         {tab === "signup" && (
           <>
             {signupDone ? (
@@ -263,20 +255,14 @@ function LoginPageInner() {
                     We sent a confirmation link to<br />
                     <strong className="text-foreground">{signupEmail}</strong>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-                    Click the link in the email to activate your account, then sign in.
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Click the link to activate your account, then sign in.
                   </p>
                 </div>
-                <button
-                  onClick={() => { setTab("signin"); setSignupDone(false) }}
-                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold"
-                >
+                <button onClick={() => { setTab("signin"); setSignupDone(false) }}
+                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">
                   Go to Sign In
                 </button>
-                <p className="text-[10px] text-muted-foreground">
-                  Didn't receive it? Check spam or{" "}
-                  <button onClick={handleSignUp} className="text-primary underline">resend</button>
-                </p>
               </div>
             ) : (
               <form onSubmit={handleSignUp} autoComplete="on" className="space-y-3">
@@ -284,12 +270,10 @@ function LoginPageInner() {
                   <label className="text-xs font-medium text-muted-foreground">Full Name</label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input
-                      type="text" required autoComplete="name"
+                    <input type="text" required autoComplete="name"
                       value={signupFullName} onChange={e => setSignupFullName(e.target.value)}
                       placeholder="Ahmed Hassan"
-                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary transition-colors"
-                    />
+                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary" />
                   </div>
                 </div>
 
@@ -297,28 +281,22 @@ function LoginPageInner() {
                   <label className="text-xs font-medium text-muted-foreground">Employee Number</label>
                   <div className="relative">
                     <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input
-                      type="text" required
+                    <input type="text" required
                       value={signupEmployeeNo} onChange={e => setSignupEmployeeNo(e.target.value.toUpperCase())}
                       placeholder="DRV-001"
-                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary transition-colors font-mono"
-                    />
+                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary font-mono" />
                   </div>
-                  <p className="text-[10px] text-muted-foreground pl-1">
-                    Ask HR for your employee number
-                  </p>
+                  <p className="text-[10px] text-muted-foreground pl-1">Ask HR for your employee number</p>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input
-                      type="email" required autoComplete="email"
+                    <input type="email" required autoComplete="email"
                       value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
                       placeholder="you@company.com"
-                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary transition-colors"
-                    />
+                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border border-transparent focus:border-primary" />
                   </div>
                 </div>
 
@@ -326,13 +304,10 @@ function LoginPageInner() {
                   <label className="text-xs font-medium text-muted-foreground">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input
-                      type={showSignupPassword ? "text" : "password"} required
-                      autoComplete="new-password"
+                    <input type={showSignupPassword ? "text" : "password"} required autoComplete="new-password"
                       value={signupPassword} onChange={e => setSignupPassword(e.target.value)}
                       placeholder="Min. 8 characters"
-                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-12 py-3 outline-none border border-transparent focus:border-primary transition-colors"
-                    />
+                      className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-12 py-3 outline-none border border-transparent focus:border-primary" />
                     <button type="button" onClick={() => setShowSignupPassword(!showSignupPassword)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" tabIndex={-1}>
                       {showSignupPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -344,19 +319,14 @@ function LoginPageInner() {
                   <label className="text-xs font-medium text-muted-foreground">Confirm Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <input
-                      type={showSignupPassword ? "text" : "password"} required
-                      autoComplete="new-password"
+                    <input type={showSignupPassword ? "text" : "password"} required autoComplete="new-password"
                       value={signupConfirm} onChange={e => setSignupConfirm(e.target.value)}
                       placeholder="••••••••"
                       className={`w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-10 pr-4 py-3 outline-none border transition-colors ${
-                        signupConfirm && signupPassword !== signupConfirm
-                          ? "border-destructive"
-                          : signupConfirm && signupPassword === signupConfirm
-                            ? "border-chart-3"
-                            : "border-transparent focus:border-primary"
-                      }`}
-                    />
+                        signupConfirm && signupPassword !== signupConfirm ? "border-destructive"
+                        : signupConfirm && signupPassword === signupConfirm ? "border-chart-3"
+                        : "border-transparent focus:border-primary"
+                      }`} />
                   </div>
                   {signupConfirm && signupPassword !== signupConfirm && (
                     <p className="text-[10px] text-destructive pl-1">Passwords don't match</p>
@@ -381,8 +351,7 @@ function LoginPageInner() {
                   Create Account
                 </button>
 
-                <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-                  By creating an account you agree to the company's HR policies.
+                <p className="text-[10px] text-muted-foreground text-center">
                   A confirmation email will be sent to verify your address.
                 </p>
               </form>
