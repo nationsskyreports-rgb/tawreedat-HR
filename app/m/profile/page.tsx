@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ArrowLeft, Loader2, User, Fingerprint, CheckCircle2,
-  AlertCircle, LogOut, ShieldCheck, Lock, Eye, EyeOff
+  ArrowLeft, Loader2, Fingerprint, CheckCircle2,
+  AlertCircle, LogOut, ShieldCheck, Lock, Eye, EyeOff, KeyRound,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Profile, Employee } from "@/lib/types"
@@ -21,16 +21,23 @@ export default function MobileProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [userEmail, setUserEmail] = useState<string>("")
 
+  // Biometric state
   const [biometricAvailable, setBiometricAvailable] = useState(false)
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricLoading, setBiometricLoading] = useState(false)
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
-
-  // Password confirmation for biometric setup
+  const [bioMessage, setBioMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
   const [passwordInput, setPasswordInput] = useState("")
   const [showPwd, setShowPwd] = useState(false)
   const [pwdError, setPwdError] = useState<string | null>(null)
+
+  // Change Password state
+  const [showPwdChangeForm, setShowPwdChangeForm] = useState(false)
+  const [pwdChange, setPwdChange] = useState({ newPassword: "", confirmPassword: "" })
+  const [showNewPwd, setShowNewPwd] = useState(false)
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false)
+  const [pwdChanging, setPwdChanging] = useState(false)
+  const [pwdChangeMsg, setPwdChangeMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function loadData() {
     setLoading(true)
@@ -65,31 +72,24 @@ export default function MobileProfilePage() {
       setPwdError("Enter your password to enable biometric")
       return
     }
-
     setPwdError(null)
     setBiometricLoading(true)
-
-    // Verify password first
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: userEmail,
       password: passwordInput,
     })
-
     if (signInErr) {
       setBiometricLoading(false)
       setPwdError("Incorrect password")
       return
     }
-
-    // Password correct → enable biometric
     const result = await enableBiometricLogin(userEmail, passwordInput)
     setBiometricLoading(false)
-
     if (result.ok) {
       setBiometricEnabled(true)
       setShowPasswordPrompt(false)
       setPasswordInput("")
-      setMessage({ ok: true, text: "Biometric login enabled! Use it on next sign-in." })
+      setBioMessage({ ok: true, text: "Biometric login enabled! Use it on next sign-in." })
     } else {
       setPwdError(result.error)
     }
@@ -99,7 +99,29 @@ export default function MobileProfilePage() {
     if (!confirm("Disable biometric login on this device?")) return
     disableBiometric()
     setBiometricEnabled(false)
-    setMessage({ ok: true, text: "Biometric login disabled." })
+    setBioMessage({ ok: true, text: "Biometric login disabled." })
+  }
+
+  async function handleChangePassword() {
+    setPwdChangeMsg(null)
+    if (pwdChange.newPassword.length < 6) {
+      setPwdChangeMsg({ ok: false, text: "Password must be at least 6 characters" })
+      return
+    }
+    if (pwdChange.newPassword !== pwdChange.confirmPassword) {
+      setPwdChangeMsg({ ok: false, text: "Passwords don't match" })
+      return
+    }
+    setPwdChanging(true)
+    const { error } = await supabase.auth.updateUser({ password: pwdChange.newPassword })
+    setPwdChanging(false)
+    if (error) {
+      setPwdChangeMsg({ ok: false, text: error.message })
+    } else {
+      setPwdChangeMsg({ ok: true, text: "Password changed successfully" })
+      setShowPwdChangeForm(false)
+      setPwdChange({ newPassword: "", confirmPassword: "" })
+    }
   }
 
   async function logout() {
@@ -152,8 +174,7 @@ export default function MobileProfilePage() {
                 }`}>
                   {biometricEnabled
                     ? <ShieldCheck className="size-5 text-chart-3" />
-                    : <Fingerprint className="size-5 text-primary" />
-                  }
+                    : <Fingerprint className="size-5 text-primary" />}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">Biometric Login</p>
@@ -165,18 +186,24 @@ export default function MobileProfilePage() {
                 </div>
               </div>
 
-              {message && (
+              {bioMessage && (
                 <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 mb-3 ${
-                  message.ok ? "bg-chart-3/10 text-chart-3 border border-chart-3/30" : "bg-destructive/10 text-destructive border border-destructive/30"
+                  bioMessage.ok
+                    ? "bg-chart-3/10 text-chart-3 border border-chart-3/30"
+                    : "bg-destructive/10 text-destructive border border-destructive/30"
                 }`}>
-                  {message.ok ? <CheckCircle2 className="size-3.5 shrink-0" /> : <AlertCircle className="size-3.5 shrink-0" />}
-                  <span>{message.text}</span>
+                  {bioMessage.ok
+                    ? <CheckCircle2 className="size-3.5 shrink-0" />
+                    : <AlertCircle className="size-3.5 shrink-0" />}
+                  <span>{bioMessage.text}</span>
                 </div>
               )}
 
               {biometricEnabled ? (
-                <button onClick={handleDisableBiometric}
-                  className="w-full py-2.5 bg-destructive/10 text-destructive rounded-xl text-xs font-medium active:bg-destructive/20 transition-colors">
+                <button
+                  onClick={handleDisableBiometric}
+                  className="w-full py-2.5 bg-destructive/10 text-destructive rounded-xl text-xs font-medium active:bg-destructive/20 transition-colors"
+                >
                   Disable Biometric Login
                 </button>
               ) : showPasswordPrompt ? (
@@ -192,8 +219,12 @@ export default function MobileProfilePage() {
                       onKeyDown={e => e.key === "Enter" && handleEnableBiometric()}
                       className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none border border-transparent focus:border-primary"
                     />
-                    <button type="button" onClick={() => setShowPwd(!showPwd)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" tabIndex={-1}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd(!showPwd)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      tabIndex={-1}
+                    >
                       {showPwd ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                     </button>
                   </div>
@@ -203,34 +234,148 @@ export default function MobileProfilePage() {
                     </p>
                   )}
                   <div className="flex gap-2">
-                    <button onClick={() => { setShowPasswordPrompt(false); setPasswordInput(""); setPwdError(null) }}
-                      className="flex-1 py-2 text-xs bg-secondary text-foreground rounded-xl">
+                    <button
+                      onClick={() => { setShowPasswordPrompt(false); setPasswordInput(""); setPwdError(null) }}
+                      className="flex-1 py-2 text-xs bg-secondary text-foreground rounded-xl"
+                    >
                       Cancel
                     </button>
-                    <button onClick={handleEnableBiometric} disabled={biometricLoading || !passwordInput}
-                      className="flex-1 py-2 text-xs bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-1.5">
-                      {biometricLoading ? <Loader2 className="size-3 animate-spin" /> : <Fingerprint className="size-3" />}
+                    <button
+                      onClick={handleEnableBiometric}
+                      disabled={biometricLoading || !passwordInput}
+                      className="flex-1 py-2 text-xs bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    >
+                      {biometricLoading
+                        ? <Loader2 className="size-3 animate-spin" />
+                        : <Fingerprint className="size-3" />}
                       Enable
                     </button>
                   </div>
                 </div>
               ) : (
-                <button onClick={() => { setShowPasswordPrompt(true); setMessage(null) }}
-                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-semibold active:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => { setShowPasswordPrompt(true); setBioMessage(null) }}
+                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-semibold active:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
                   <Fingerprint className="size-4" /> Enable Biometric Login
                 </button>
               )}
             </div>
           )}
 
+          {/* ─── Change Password ─── */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="size-10 rounded-xl bg-chart-4/15 flex items-center justify-center shrink-0">
+                <KeyRound className="size-5 text-chart-4" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">Change Password</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Update your account password
+                </p>
+              </div>
+            </div>
+
+            {pwdChangeMsg && (
+              <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 mb-3 ${
+                pwdChangeMsg.ok
+                  ? "bg-chart-3/10 text-chart-3 border border-chart-3/30"
+                  : "bg-destructive/10 text-destructive border border-destructive/30"
+              }`}>
+                {pwdChangeMsg.ok
+                  ? <CheckCircle2 className="size-3.5 shrink-0" />
+                  : <AlertCircle className="size-3.5 shrink-0" />}
+                <span>{pwdChangeMsg.text}</span>
+              </div>
+            )}
+
+            {showPwdChangeForm ? (
+              <div className="space-y-2">
+                {/* New Password */}
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <input
+                    type={showNewPwd ? "text" : "password"}
+                    value={pwdChange.newPassword}
+                    onChange={e => setPwdChange(f => ({ ...f, newPassword: e.target.value }))}
+                    placeholder="New password (min 6 chars)"
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none border border-transparent focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPwd(!showNewPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    tabIndex={-1}
+                  >
+                    {showNewPwd ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                </div>
+
+                {/* Confirm Password */}
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <input
+                    type={showConfirmPwd ? "text" : "password"}
+                    value={pwdChange.confirmPassword}
+                    onChange={e => setPwdChange(f => ({ ...f, confirmPassword: e.target.value }))}
+                    placeholder="Confirm new password"
+                    onKeyDown={e => e.key === "Enter" && handleChangePassword()}
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none border border-transparent focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPwd(!showConfirmPwd)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPwd ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setShowPwdChangeForm(false)
+                      setPwdChange({ newPassword: "", confirmPassword: "" })
+                      setPwdChangeMsg(null)
+                    }}
+                    className="flex-1 py-2 text-xs bg-secondary text-foreground rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={pwdChanging || !pwdChange.newPassword || !pwdChange.confirmPassword}
+                    className="flex-1 py-2 text-xs bg-primary text-primary-foreground rounded-xl font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {pwdChanging
+                      ? <Loader2 className="size-3 animate-spin" />
+                      : <KeyRound className="size-3" />}
+                    Update
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setShowPwdChangeForm(true); setPwdChangeMsg(null) }}
+                className="w-full py-2.5 bg-chart-4/10 text-chart-4 rounded-xl text-xs font-semibold active:bg-chart-4/20 transition-colors flex items-center justify-center gap-2"
+              >
+                <KeyRound className="size-4" /> Change Password
+              </button>
+            )}
+          </div>
+
           {/* Personal info */}
           {employee && (
             <div className="bg-card border border-border rounded-2xl divide-y divide-border/50">
               <InfoRow label="Phone"     value={employee.phone ?? "—"} />
               <InfoRow label="Email"     value={employee.email ?? "—"} />
-              <InfoRow label="Hire Date" value={employee.hire_date ? new Date(employee.hire_date).toLocaleDateString("en-GB") : "—"} />
+              <InfoRow label="Hire Date" value={employee.hire_date
+                ? new Date(employee.hire_date).toLocaleDateString("en-GB")
+                : "—"} />
               <InfoRow label="Contract"  value={employee.contract_type ?? "—"} className="capitalize" />
-              <InfoRow label="Status"    value={employee.status ?? "—"} className="capitalize" />
+              <InfoRow label="Status"    value={employee.status ?? "—"}         className="capitalize" />
             </div>
           )}
 
@@ -238,8 +383,10 @@ export default function MobileProfilePage() {
             To update your info, please contact HR
           </p>
 
-          <button onClick={logout}
-            className="w-full py-3 bg-destructive/10 text-destructive rounded-xl text-sm font-medium active:bg-destructive/20 transition-colors flex items-center justify-center gap-2">
+          <button
+            onClick={logout}
+            className="w-full py-3 bg-destructive/10 text-destructive rounded-xl text-sm font-medium active:bg-destructive/20 transition-colors flex items-center justify-center gap-2"
+          >
             <LogOut className="size-4" />
             Log out
           </button>
@@ -257,7 +404,9 @@ function InfoRow({ label, value, className }: { label: string; value: string; cl
   return (
     <div className="flex items-center justify-between px-4 py-2.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`text-xs text-foreground font-medium truncate max-w-[60%] text-right ${className ?? ""}`}>{value}</span>
+      <span className={`text-xs text-foreground font-medium truncate max-w-[60%] text-right ${className ?? ""}`}>
+        {value}
+      </span>
     </div>
   )
 }
