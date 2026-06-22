@@ -1,22 +1,25 @@
 "use client"
 
 import { useRouter, usePathname } from "next/navigation"
-import { Home, MapPin, CalendarCheck, Wallet, User } from "lucide-react"
+import { Home, MapPin, ClipboardList, CalendarCheck, User } from "lucide-react"
 
 export function MobileBottomNav() {
   const router = useRouter()
   const pathname = usePathname()
 
   const items = [
-    { href: "/m",         label: "Home",     icon: Home },
-    { href: "/m/checkin", label: "Check-In", icon: MapPin },
-    { href: "/m/leave",   label: "Leave",    icon: CalendarCheck },
-    { href: "/m/payslip", label: "Payslip",  icon: Wallet },
-    { href: "/m/profile", label: "Profile",  icon: User },
+    { href: "/m",            label: "Home",       icon: Home },
+    { href: "/m/checkin",    label: "Check-In",   icon: MapPin },
+    { href: "/m/attendance", label: "Attendance", icon: ClipboardList },
+    { href: "/m/leave",      label: "Leave",      icon: CalendarCheck },
+    { href: "/m/profile",    label: "Profile",    icon: User },
   ]
 
   return (
-    <nav className="shrink-0 bg-card border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <nav
+      className="shrink-0 bg-card border-t border-border"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="grid grid-cols-5">
         {items.map(item => {
           const Icon = item.icon
