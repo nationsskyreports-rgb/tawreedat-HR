@@ -19,6 +19,7 @@ import { AnnouncementsTab } from "@/components/announcements-tab"
 import { DocumentsTab } from "@/components/documents-tab"
 import { HolidaysTab } from "@/components/holidays-tab"
 import { PerformanceTab } from "@/components/performance-tab"
+import { RequestsTab } from "@/components/requests-tab"
 import { Bell, Search, X, Sun, Moon, Shield, Briefcase, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
@@ -95,22 +96,23 @@ export default function Page() {
   const RoleIcon = roleConfig[role].icon
 
   const tabContent: Record<string, React.ReactNode> = {
-    overview: <OverviewTab />,
-    checkin: <CheckinTab />,
+    overview:      <OverviewTab />,
+    checkin:       <CheckinTab />,
     profitability: <ProfitabilityTab />,
-    ats: <ATSTab />,
-    roadmap: <RoadmapTab />,
-    employees: <EmployeesTab />,
-    projects: <ProjectsTab />,
-    scheduling: <SchedulingTab />,
-    settings: <SettingsTab />,
-    payroll: <PayrollTab />,
-    leaves: <LeavesTab />,
-    reports: <ReportsTab />,
+    ats:           <ATSTab />,
+    roadmap:       <RoadmapTab />,
+    employees:     <EmployeesTab />,
+    projects:      <ProjectsTab />,
+    scheduling:    <SchedulingTab />,
+    settings:      <SettingsTab />,
+    payroll:       <PayrollTab />,
+    leaves:        <LeavesTab />,
+    requests:      <RequestsTab />,
+    reports:       <ReportsTab />,
     announcements: <AnnouncementsTab />,
-    documents: <DocumentsTab />,
-    holidays: <HolidaysTab />,
-    performance: <PerformanceTab />,
+    documents:     <DocumentsTab />,
+    holidays:      <HolidaysTab />,
+    performance:   <PerformanceTab />,
   }
 
   return (
@@ -161,13 +163,21 @@ export default function Page() {
                   </div>
                   <div className="flex flex-col py-2">
                     {alerts.map((alert) => (
-                      <div key={alert.type} className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary/50 transition-colors">
+                      <div
+                        key={alert.type}
+                        className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary/50 transition-colors"
+                      >
                         <span className="text-xs text-muted-foreground">{alert.type}</span>
-                        <Badge variant="secondary" className={`text-xs ${
-                          alert.urgency === "high" ? "bg-destructive/15 text-destructive" :
-                          alert.urgency === "medium" ? "bg-primary/15 text-primary" :
-                          "bg-secondary text-secondary-foreground"
-                        }`}>{alert.count}</Badge>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${
+                            alert.urgency === "high"   ? "bg-destructive/15 text-destructive" :
+                            alert.urgency === "medium" ? "bg-primary/15 text-primary" :
+                            "bg-secondary text-secondary-foreground"
+                          }`}
+                        >
+                          {alert.count}
+                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -204,11 +214,11 @@ export default function Page() {
 
         <div className="flex items-center gap-1 px-6 py-2 border-b border-border/50 bg-sidebar/60 shrink-0 overflow-x-auto">
           {[
-            { id: "overview", label: "Command Center" },
-            { id: "checkin", label: "Field Check-In" },
+            { id: "overview",      label: "Command Center" },
+            { id: "checkin",       label: "Field Check-In" },
             { id: "profitability", label: "Project P&L" },
-            { id: "ats", label: "AI Recruitment" },
-            { id: "roadmap", label: "Roadmap" },
+            { id: "ats",           label: "AI Recruitment" },
+            { id: "roadmap",       label: "Roadmap" },
           ].map((t) => (
             <button
               key={t.id}
