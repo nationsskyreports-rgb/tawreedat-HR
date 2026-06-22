@@ -259,7 +259,7 @@ export type Employee = {
   created_by: string | null
 }
 
-// Employee with optional joined relations (for queries with select(`*, department:departments(*)`))
+// Employee with optional joined relations (for queries with select(`*, department:departments(*)`)
 export type EmployeeWithRelations = Employee & {
   department?: Department | null
   position?: Position | null
@@ -730,3 +730,44 @@ export type SelectOption = {
 export type Result<T> =
   | { ok: true; data: T }
   | { ok: false; error: string }
+
+// -----------------------------------------------------------------------------
+// OVERTIME RECORDS
+// -----------------------------------------------------------------------------
+export type OvertimeSource = "employee_request" | "hr_manual"
+export type OvertimeStatus = "pending" | "approved" | "rejected"
+
+export type OvertimeRecord = {
+  id: string
+  employee_id: string
+  date: string
+  hours: number
+  reason: string
+  source: OvertimeSource
+  status: OvertimeStatus
+  approved_by: string | null
+  approved_at: string | null
+  payroll_period_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// -----------------------------------------------------------------------------
+// MISSING PUNCH REQUESTS
+// -----------------------------------------------------------------------------
+export type PunchType = "check_in" | "check_out"
+export type MissingPunchStatus = "pending" | "approved" | "rejected"
+
+export type MissingPunchRequest = {
+  id: string
+  employee_id: string
+  date: string
+  punch_type: PunchType
+  expected_time: string
+  reason: string
+  status: MissingPunchStatus
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+}
