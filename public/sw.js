@@ -1,6 +1,6 @@
 // Tawreedat HRIS — Service Worker
 // ⚠️ Bump CACHE_VERSION on every deployment
-const CACHE_VERSION = "v3"
+const CACHE_VERSION = "v4"
 const CACHE_NAME = `tawreedat-${CACHE_VERSION}`
 
 const STATIC_ASSETS = [
@@ -14,6 +14,7 @@ const STATIC_ASSETS = [
 const MOBILE_ROUTES = [
   "/m",
   "/m/checkin",
+  "/m/attendance",
   "/m/leave",
   "/m/payslip",
   "/m/profile",
@@ -22,7 +23,7 @@ const MOBILE_ROUTES = [
 
 const ALL_CACHED = [...STATIC_ASSETS, ...MOBILE_ROUTES]
 
-// Install — cache everything
+// ── Install ─────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -34,7 +35,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting()
 })
 
-// Activate — remove old caches
+// ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -51,27 +52,18 @@ self.addEventListener("activate", (event) => {
   self.clients.claim()
 })
 
-// Fetch strategy:
-// - API routes / Supabase → Network only (never cache)
-// - Static assets → Cache first
-// - Pages → Network first, fallback to cache
+// ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Skip non-GET
   if (request.method !== "GET") return
-
-  // Skip external (Supabase, fonts, etc.)
   if (url.origin !== self.location.origin) return
-
-  // Skip Next.js internals and API routes → always network
   if (
     url.pathname.startsWith("/_next/") ||
     url.pathname.startsWith("/api/")
   ) return
 
-  // Static files (icons, manifest) → cache first
   const isStatic = STATIC_ASSETS.some(
     (a) => url.pathname === a || url.pathname.startsWith("/_next/static/")
   )
@@ -90,7 +82,6 @@ self.addEventListener("fetch", (event) => {
     return
   }
 
-  // Pages → Network first, fallback to cache, then offline page
   event.respondWith(
     fetch(request)
       .then((res) => {
@@ -102,12 +93,65 @@ self.addEventListener("fetch", (event) => {
       .catch(() => {
         return caches.match(request).then((cached) => {
           if (cached) return cached
-          // Offline fallback
           if (request.mode === "navigate") {
             return caches.match("/m") || caches.match("/login")
           }
           return new Response("Offline", { status: 503 })
         })
+      })
+  )
+})
+
+// ── Push Notifications ────────────────────────────────────────────────────────
+self.addEventListener("push", (event) => {
+  if (!event.data) return
+
+  let data = {}
+  try {
+    data = event.data.json()
+  } catch {
+    data = { title: "Tawreedat", body: event.data.text() }
+  }
+
+  const {
+    title = "Tawreedat HRIS",
+    body  = "You have a new notification",
+    url   = "/m",
+    icon  = "/icon-192.png",
+  } = data
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon,
+      badge:   "/favicon.ico",
+      data:    { url },
+      vibrate: [100, 50, 100],
+      requireInteraction: false,
+    })
+  )
+})
+
+// ── Notification Click ────────────────────────────────────────────────────────
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+
+  const targetUrl = event.notification.data?.url ?? "/m"
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        // If app already open, focus it and navigate
+        for (const client of clientList) {
+          if ("focus" in client) {
+            client.focus()
+            client.navigate(targetUrl)
+            return
+          }
+        }
+        // Otherwise open a new window
+        return clients.openWindow(targetUrl)
       })
   )
 })
