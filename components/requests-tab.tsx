@@ -7,10 +7,11 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import { toast } from "@/components/toast"
 import type { Employee, OvertimeRecord, MissingPunchRequest } from "@/lib/types"
 
-type OTRow = OvertimeRecord & { employee_name?: string; employee_no?: string }
-type PunchRow = MissingPunchRequest & { employee_name?: string; employee_no?: string }
+type OTRow    = OvertimeRecord      & { employee_name?: string; employee_no?: string; employee_id: string }
+type PunchRow = MissingPunchRequest & { employee_name?: string; employee_no?: string; employee_id: string }
 
 const statusColors: Record<string, string> = {
   pending:  "bg-primary/15 text-primary",
@@ -18,26 +19,52 @@ const statusColors: Record<string, string> = {
   rejected: "bg-destructive/15 text-destructive",
 }
 
+// ── Helper: send push to an employee's devices ────────────────────────────────
+async function notifyEmployee(
+  employeeId: string,
+  title: string,
+  body: string,
+  url = "/m/attendance"
+) {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("employee_id", employeeId)
+      .single()
+
+    if (!profile?.id) return
+
+    await fetch("/api/send-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: profile.id, title, body, url }),
+    })
+  } catch {
+    // Push is best-effort — don't block UI
+  }
+}
+
 export function RequestsTab() {
-  const [activeTab, setActiveTab] = useState<"overtime" | "missing_punch">("overtime")
-  const [loading, setLoading] = useState(true)
+  const [activeTab,     setActiveTab]     = useState<"overtime" | "missing_punch">("overtime")
+  const [loading,       setLoading]       = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  const [otList, setOtList] = useState<OTRow[]>([])
+  const [otList,    setOtList]    = useState<OTRow[]>([])
   const [punchList, setPunchList] = useState<PunchRow[]>([])
   const [employees, setEmployees] = useState<Pick<Employee, "id" | "full_name" | "employee_no">[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  const [otFilter, setOtFilter] = useState<"pending" | "all">("pending")
+  const [otFilter,    setOtFilter]    = useState<"pending" | "all">("pending")
   const [punchFilter, setPunchFilter] = useState<"pending" | "all">("pending")
 
   // Manual OT form
   const [showManualOT, setShowManualOT] = useState(false)
-  const [manualForm, setManualForm] = useState({
+  const [manualForm,   setManualForm]   = useState({
     employee_id: "", date: "", hours: "", reason: "", notes: "",
   })
   const [manualSaving, setManualSaving] = useState(false)
-  const [manualErr, setManualErr] = useState<string | null>(null)
+  const [manualErr,    setManualErr]    = useState<string | null>(null)
 
   async function loadData() {
     setLoading(true)
@@ -45,13 +72,16 @@ export function RequestsTab() {
     setCurrentUserId(user?.id ?? null)
 
     const [otRes, punchRes, empRes] = await Promise.all([
-      supabase.from("overtime_records")
+      supabase
+        .from("overtime_records")
         .select("*, employees(full_name, employee_no)")
         .order("created_at", { ascending: false }),
-      supabase.from("missing_punch_requests")
+      supabase
+        .from("missing_punch_requests")
         .select("*, employees(full_name, employee_no)")
         .order("created_at", { ascending: false }),
-      supabase.from("employees")
+      supabase
+        .from("employees")
         .select("id, full_name, employee_no")
         .eq("status", "active")
         .order("full_name"),
@@ -60,12 +90,12 @@ export function RequestsTab() {
     setOtList((otRes.data ?? []).map((r: any) => ({
       ...r,
       employee_name: r.employees?.full_name,
-      employee_no: r.employees?.employee_no,
+      employee_no:   r.employees?.employee_no,
     })))
     setPunchList((punchRes.data ?? []).map((r: any) => ({
       ...r,
       employee_name: r.employees?.full_name,
-      employee_no: r.employees?.employee_no,
+      employee_no:   r.employees?.employee_no,
     })))
     setEmployees((empRes.data ?? []) as any)
     setLoading(false)
@@ -73,51 +103,101 @@ export function RequestsTab() {
 
   useEffect(() => { loadData() }, [])
 
-  async function approveOT(id: string) {
+  // ── Overtime actions ──────────────────────────────────────────────────────
+  async function approveOT(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    await supabase.from("overtime_records").update({
-      status: "approved",
+    const { error } = await supabase.from("overtime_records").update({
+      status:      "approved",
       approved_by: currentUserId,
       approved_at: new Date().toISOString(),
     }).eq("id", id)
+
+    if (error) {
+      toast("Failed to approve request", "error")
+    } else {
+      toast(`Overtime approved for ${employeeName}`, "success")
+      notifyEmployee(
+        employeeId,
+        "Overtime Approved ✅",
+        "Your overtime request has been approved",
+        "/m/attendance"
+      )
+    }
     await loadData()
     setActionLoading(null)
   }
 
-  async function rejectOT(id: string) {
+  async function rejectOT(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    await supabase.from("overtime_records").update({
-      status: "rejected",
+    const { error } = await supabase.from("overtime_records").update({
+      status:      "rejected",
       approved_by: currentUserId,
       approved_at: new Date().toISOString(),
     }).eq("id", id)
+
+    if (error) {
+      toast("Failed to reject request", "error")
+    } else {
+      toast(`Overtime rejected for ${employeeName}`, "warning")
+      notifyEmployee(
+        employeeId,
+        "Overtime Request Update",
+        "Your overtime request was not approved",
+        "/m/attendance"
+      )
+    }
     await loadData()
     setActionLoading(null)
   }
 
-  async function approvePunch(id: string) {
+  // ── Missing Punch actions ─────────────────────────────────────────────────
+  async function approvePunch(id: string, employeeId: string, employeeName: string) {
     if (!currentUserId) return
     setActionLoading(id)
     const { error } = await supabase.rpc("approve_missing_punch", {
-      request_id: id,
+      request_id:  id,
       approver_id: currentUserId,
     })
-    if (error) console.error("approve_missing_punch:", error.message)
+
+    if (error) {
+      toast("Failed to approve — " + error.message, "error")
+    } else {
+      toast(`Missing punch approved for ${employeeName}`, "success")
+      notifyEmployee(
+        employeeId,
+        "Missing Punch Approved ✅",
+        "Your missing punch request has been approved and attendance updated",
+        "/m/attendance"
+      )
+    }
     await loadData()
     setActionLoading(null)
   }
 
-  async function rejectPunch(id: string) {
+  async function rejectPunch(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    await supabase.from("missing_punch_requests").update({
-      status: "rejected",
+    const { error } = await supabase.from("missing_punch_requests").update({
+      status:      "rejected",
       approved_by: currentUserId,
       approved_at: new Date().toISOString(),
     }).eq("id", id)
+
+    if (error) {
+      toast("Failed to reject request", "error")
+    } else {
+      toast(`Missing punch rejected for ${employeeName}`, "warning")
+      notifyEmployee(
+        employeeId,
+        "Missing Punch Request Update",
+        "Your missing punch request was not approved",
+        "/m/attendance"
+      )
+    }
     await loadData()
     setActionLoading(null)
   }
 
+  // ── Manual OT ─────────────────────────────────────────────────────────────
   async function submitManualOT() {
     setManualErr(null)
     if (!manualForm.employee_id || !manualForm.date || !manualForm.hours || !manualForm.reason.trim()) {
@@ -132,20 +212,29 @@ export function RequestsTab() {
     setManualSaving(true)
     const { error } = await supabase.from("overtime_records").insert({
       employee_id: manualForm.employee_id,
-      date: manualForm.date,
-      hours: hrs,
-      reason: manualForm.reason.trim(),
-      notes: manualForm.notes.trim() || null,
-      source: "hr_manual",
-      status: "approved",
+      date:        manualForm.date,
+      hours:       hrs,
+      reason:      manualForm.reason.trim(),
+      notes:       manualForm.notes.trim() || null,
+      source:      "hr_manual",
+      status:      "approved",
       approved_by: currentUserId,
       approved_at: new Date().toISOString(),
     })
     setManualSaving(false)
+
     if (error) {
       if (error.code === "23505") setManualErr("OT already recorded for this employee on this date")
       else setManualErr(error.message)
     } else {
+      const emp = employees.find(e => e.id === manualForm.employee_id)
+      toast(`Manual OT added for ${emp?.full_name ?? "employee"}`, "success")
+      notifyEmployee(
+        manualForm.employee_id,
+        "Overtime Recorded ✅",
+        `${hrs}h overtime has been recorded by HR`,
+        "/m/attendance"
+      )
       setShowManualOT(false)
       setManualForm({ employee_id: "", date: "", hours: "", reason: "", notes: "" })
       await loadData()
@@ -219,12 +308,9 @@ export function RequestsTab() {
       {activeTab === "overtime" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            {/* Filter */}
             <div className="flex gap-1.5">
               {(["pending", "all"] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setOtFilter(f)}
+                <button key={f} onClick={() => setOtFilter(f)}
                   className={`px-3 py-1 text-xs rounded-md transition-colors ${
                     otFilter === f
                       ? "bg-primary/15 text-primary font-medium"
@@ -235,7 +321,6 @@ export function RequestsTab() {
                 </button>
               ))}
             </div>
-            {/* Manual OT button */}
             <button
               onClick={() => setShowManualOT(!showManualOT)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium"
@@ -249,10 +334,8 @@ export function RequestsTab() {
             <div className="bg-card border border-border rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-foreground">Manual Overtime Entry</p>
-                <button
-                  onClick={() => { setShowManualOT(false); setManualErr(null) }}
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <button onClick={() => { setShowManualOT(false); setManualErr(null) }}
+                  className="text-muted-foreground hover:text-foreground">
                   <X className="size-4" />
                 </button>
               </div>
@@ -273,44 +356,33 @@ export function RequestsTab() {
                     ))}
                   </select>
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Date *</label>
-                  <input
-                    type="date"
-                    value={manualForm.date}
+                  <input type="date" value={manualForm.date}
                     onChange={e => setManualForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full bg-secondary/60 text-foreground text-sm rounded-lg px-2.5 py-2 outline-none border border-transparent focus:border-primary"
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Hours *</label>
-                  <input
-                    type="number" min="0.5" max="24" step="0.5"
+                  <input type="number" min="0.5" max="24" step="0.5"
                     value={manualForm.hours}
                     onChange={e => setManualForm(f => ({ ...f, hours: e.target.value }))}
                     placeholder="e.g. 3"
                     className="w-full bg-secondary/60 text-foreground text-sm rounded-lg px-2.5 py-2 outline-none border border-transparent focus:border-primary"
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Reason *</label>
-                  <input
-                    type="text"
-                    value={manualForm.reason}
+                  <input type="text" value={manualForm.reason}
                     onChange={e => setManualForm(f => ({ ...f, reason: e.target.value }))}
                     placeholder="Project deadline, etc."
                     className="w-full bg-secondary/60 text-foreground text-sm rounded-lg px-2.5 py-2 outline-none border border-transparent focus:border-primary"
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Notes</label>
-                  <input
-                    type="text"
-                    value={manualForm.notes}
+                  <input type="text" value={manualForm.notes}
                     onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))}
                     placeholder="Optional"
                     className="w-full bg-secondary/60 text-foreground text-sm rounded-lg px-2.5 py-2 outline-none border border-transparent focus:border-primary"
@@ -325,11 +397,8 @@ export function RequestsTab() {
               )}
 
               <div className="flex justify-end">
-                <button
-                  onClick={submitManualOT}
-                  disabled={manualSaving}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium disabled:opacity-50 flex items-center gap-1.5"
-                >
+                <button onClick={submitManualOT} disabled={manualSaving}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium disabled:opacity-50 flex items-center gap-1.5">
                   {manualSaving ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
                   Add & Approve
                 </button>
@@ -387,7 +456,7 @@ export function RequestsTab() {
                       {ot.status === "pending" && (
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => approveOT(ot.id)}
+                            onClick={() => approveOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
                             disabled={actionLoading === ot.id}
                             className="px-2.5 py-1 bg-chart-3/15 text-chart-3 rounded-lg text-[11px] font-medium hover:bg-chart-3/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -397,7 +466,7 @@ export function RequestsTab() {
                             Approve
                           </button>
                           <button
-                            onClick={() => rejectOT(ot.id)}
+                            onClick={() => rejectOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
                             disabled={actionLoading === ot.id}
                             className="px-2.5 py-1 bg-destructive/15 text-destructive rounded-lg text-[11px] font-medium hover:bg-destructive/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -419,9 +488,7 @@ export function RequestsTab() {
         <div className="space-y-4">
           <div className="flex gap-1.5">
             {(["pending", "all"] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setPunchFilter(f)}
+              <button key={f} onClick={() => setPunchFilter(f)}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${
                   punchFilter === f
                     ? "bg-primary/15 text-primary font-medium"
@@ -476,7 +543,7 @@ export function RequestsTab() {
                       {p.status === "pending" && (
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => approvePunch(p.id)}
+                            onClick={() => approvePunch(p.id, p.employee_id, p.employee_name ?? "")}
                             disabled={actionLoading === p.id}
                             className="px-2.5 py-1 bg-chart-3/15 text-chart-3 rounded-lg text-[11px] font-medium hover:bg-chart-3/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -486,7 +553,7 @@ export function RequestsTab() {
                             Approve
                           </button>
                           <button
-                            onClick={() => rejectPunch(p.id)}
+                            onClick={() => rejectPunch(p.id, p.employee_id, p.employee_name ?? "")}
                             disabled={actionLoading === p.id}
                             className="px-2.5 py-1 bg-destructive/15 text-destructive rounded-lg text-[11px] font-medium hover:bg-destructive/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
