@@ -20,6 +20,7 @@ import {
   PartyPopper,
   Star,
   Truck,
+  ClipboardCheck,
 } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
 
@@ -35,6 +36,7 @@ const navItems = [
   { id: "ats",           label: "AI Recruitment",  icon: Bot },
   { id: "payroll",       label: "Payroll",         icon: DollarSign },
   { id: "leaves",        label: "Leaves",          icon: CalendarCheck },
+  { id: "requests",      label: "Requests",        icon: ClipboardCheck },
   { id: "scheduling",    label: "Shift Roster",    icon: Calendar },
   { id: "reports",       label: "Reports",         icon: BarChart3 },
   { id: "announcements", label: "Announcements",   icon: Megaphone },
