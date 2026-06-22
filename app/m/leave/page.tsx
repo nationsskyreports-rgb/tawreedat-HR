@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft, Loader2, CalendarCheck, Plus, X,
-  CheckCircle2, XCircle, Clock, AlertTriangle
+  CheckCircle2, XCircle, Clock, AlertTriangle,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Employee, LeaveType, LeaveBalance, LeaveRequest, LeaveRequestStatus } from "@/lib/types"
@@ -15,6 +15,13 @@ const statusColors: Record<LeaveRequestStatus, string> = {
   approved:  "bg-chart-3/15 text-chart-3",
   rejected:  "bg-destructive/15 text-destructive",
   cancelled: "bg-secondary text-secondary-foreground",
+}
+
+const statusIcons: Record<LeaveRequestStatus, typeof Clock> = {
+  pending:   Clock,
+  approved:  CheckCircle2,
+  rejected:  XCircle,
+  cancelled: X,
 }
 
 function calcDays(start: string, end: string): number {
@@ -66,7 +73,7 @@ export default function MobileLeavePage() {
         .eq("year", new Date().getFullYear()),
       supabase.from("leave_requests").select("*, leave_types(name, color)")
         .eq("employee_id", profileData.employee_id)
-        .order("created_at", { ascending: false }).limit(10),
+        .order("created_at", { ascending: false }).limit(15),
     ])
 
     setEmployee(empRes.data as Employee | null)
@@ -116,6 +123,17 @@ export default function MobileLeavePage() {
     b.employee_id === employee?.id && b.leave_type_id === form.leave_type_id
   )
 
+  // Enrich balances with leave type info
+  const enrichedBalances = balances.map(b => ({
+    ...b,
+    leaveType: leaveTypes.find(t => t.id === b.leave_type_id),
+  })).filter(b => b.leaveType)
+
+  // Pick the annual leave balance to show prominently (largest entitled_days, or first)
+  const annualBalance = enrichedBalances.find(b =>
+    b.leaveType?.name?.toLowerCase().includes("annual")
+  ) ?? enrichedBalances[0]
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -129,7 +147,9 @@ export default function MobileLeavePage() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <AlertTriangle className="size-10 text-muted-foreground mb-3" />
         <p className="text-sm text-foreground font-medium mb-1">No employee profile linked</p>
-        <p className="text-xs text-muted-foreground mb-4">Ask HR to link your account to an employee record</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Ask HR to link your account to an employee record
+        </p>
         <button onClick={() => router.push("/m")} className="text-xs text-primary">← Back</button>
       </div>
     )
@@ -142,11 +162,13 @@ export default function MobileLeavePage() {
           <button onClick={() => router.push("/m")} className="p-1.5 text-muted-foreground">
             <ArrowLeft className="size-4" />
           </button>
-          <h1 className="text-sm font-semibold text-foreground">Leave Requests</h1>
+          <h1 className="text-sm font-semibold text-foreground">Leave</h1>
         </div>
-        <button onClick={() => { setShowForm(true); setSuccess(false); setErr(null) }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg">
-          <Plus className="size-3.5" /> New
+        <button
+          onClick={() => { setShowForm(true); setSuccess(false); setErr(null) }}
+          className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg"
+        >
+          <Plus className="size-3.5" /> New Request
         </button>
       </header>
 
@@ -160,30 +182,83 @@ export default function MobileLeavePage() {
             </div>
           )}
 
-          {/* Balances */}
-          {balances.length > 0 && (
+          {/* ─── Annual Balance Hero ─── */}
+          {annualBalance && (
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: `linear-gradient(135deg, ${annualBalance.leaveType?.color ?? "var(--primary)"}22, ${annualBalance.leaveType?.color ?? "var(--primary)"}0a)`,
+                border: `1px solid ${annualBalance.leaveType?.color ?? "var(--primary)"}33`,
+              }}
+            >
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {annualBalance.leaveType?.name} Balance — {new Date().getFullYear()}
+              </p>
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-3xl font-bold text-foreground leading-none">
+                    {annualBalance.remaining_days.toFixed(1)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    days remaining out of {annualBalance.entitled_days.toFixed(0)}
+                  </p>
+                </div>
+                <div className="text-right text-[11px] text-muted-foreground space-y-0.5">
+                  <p>Used: <span className="text-foreground font-medium">{annualBalance.used_days.toFixed(1)}d</span></p>
+                  {annualBalance.pending_days > 0 && (
+                    <p>Pending: <span className="text-primary font-medium">{annualBalance.pending_days.toFixed(1)}d</span></p>
+                  )}
+                  {annualBalance.carried_over_days > 0 && (
+                    <p>Carried: <span className="text-chart-2 font-medium">+{annualBalance.carried_over_days.toFixed(1)}d</span></p>
+                  )}
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="mt-3 h-2 bg-black/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${annualBalance.entitled_days > 0
+                      ? Math.min(100, (annualBalance.used_days / annualBalance.entitled_days) * 100)
+                      : 0}%`,
+                    background: annualBalance.leaveType?.color ?? "var(--primary)",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ─── All Balances ─── */}
+          {enrichedBalances.length > 1 && (
             <div className="bg-card border border-border rounded-2xl p-4">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                My Balance — {new Date().getFullYear()}
+                All Balances
               </p>
-              <div className="space-y-2.5">
-                {balances.map(b => {
-                  const lt = leaveTypes.find(t => t.id === b.leave_type_id)
-                  if (!lt) return null
-                  const pct = b.entitled_days > 0 ? Math.min(100, ((b.entitled_days - b.remaining_days) / b.entitled_days) * 100) : 0
+              <div className="space-y-3">
+                {enrichedBalances.map(b => {
+                  const pct = b.entitled_days > 0
+                    ? Math.min(100, (b.used_days / b.entitled_days) * 100)
+                    : 0
                   return (
                     <div key={b.id}>
                       <div className="flex items-center justify-between text-xs mb-1">
                         <div className="flex items-center gap-1.5">
-                          <div className="size-2 rounded-full" style={{ background: lt.color }} />
-                          <span className="text-foreground">{lt.name}</span>
+                          <div
+                            className="size-2 rounded-full shrink-0"
+                            style={{ background: b.leaveType?.color }}
+                          />
+                          <span className="text-foreground">{b.leaveType?.name}</span>
                         </div>
                         <span className="text-muted-foreground font-mono">
-                          {b.remaining_days.toFixed(1)} / {b.entitled_days.toFixed(0)} days
+                          <span className="text-foreground font-semibold">{b.remaining_days.toFixed(1)}</span>
+                          {" / "}{b.entitled_days.toFixed(0)} days
                         </span>
                       </div>
                       <div className="h-1.5 bg-secondary/50 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: lt.color }} />
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${pct}%`, background: b.leaveType?.color }}
+                        />
                       </div>
                     </div>
                   )
@@ -192,32 +267,53 @@ export default function MobileLeavePage() {
             </div>
           )}
 
-          {/* Requests */}
+          {/* ─── Recent Requests ─── */}
           <div className="bg-card border border-border rounded-2xl">
-            <div className="px-4 py-3 border-b border-border/50">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Recent Requests</p>
+            <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Recent Requests
+              </p>
+              {requests.filter(r => r.status === "pending").length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/15 text-primary font-medium">
+                  {requests.filter(r => r.status === "pending").length} pending
+                </span>
+              )}
             </div>
+
             {requests.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">No requests yet</p>
             ) : (
               <div className="divide-y divide-border/50">
-                {requests.map((r: any) => (
-                  <div key={r.id} className="px-4 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-foreground">{r.leave_types?.name ?? "—"}</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {new Date(r.start_date).toLocaleDateString("en-GB")} → {new Date(r.end_date).toLocaleDateString("en-GB")}
-                          {" · "}<strong>{r.total_days}d</strong>
-                        </p>
-                        {r.reason && <p className="text-[10px] text-muted-foreground italic mt-0.5 truncate">"{r.reason}"</p>}
+                {requests.map((r: any) => {
+                  const StatusIcon = statusIcons[r.status as LeaveRequestStatus]
+                  return (
+                    <div key={r.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-foreground">
+                            {r.leave_types?.name ?? "—"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {new Date(r.start_date).toLocaleDateString("en-GB")}
+                            {" → "}
+                            {new Date(r.end_date).toLocaleDateString("en-GB")}
+                            {" · "}
+                            <strong>{r.total_days}d</strong>
+                          </p>
+                          {r.reason && (
+                            <p className="text-[10px] text-muted-foreground italic mt-0.5 truncate">
+                              "{r.reason}"
+                            </p>
+                          )}
+                        </div>
+                        <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0 ${statusColors[r.status as LeaveRequestStatus]}`}>
+                          <StatusIcon className="size-2.5" />
+                          {r.status}
+                        </span>
                       </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${statusColors[r.status as LeaveRequestStatus]}`}>
-                        {r.status}
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -246,13 +342,19 @@ export default function MobileLeavePage() {
 
               <div>
                 <label className="text-[10px] text-muted-foreground uppercase mb-1.5 block">Leave Type</label>
-                <select value={form.leave_type_id} onChange={e => setForm(f => ({ ...f, leave_type_id: e.target.value }))}
-                  className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none">
+                <select
+                  value={form.leave_type_id}
+                  onChange={e => setForm(f => ({ ...f, leave_type_id: e.target.value }))}
+                  className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none"
+                >
                   {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
                 {selectedBalance && (
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Available: <strong>{selectedBalance.remaining_days.toFixed(1)} days</strong>
+                    Available:{" "}
+                    <strong className={selectedBalance.remaining_days <= 3 ? "text-destructive" : "text-chart-3"}>
+                      {selectedBalance.remaining_days.toFixed(1)} days
+                    </strong>
                   </p>
                 )}
               </div>
@@ -260,13 +362,22 @@ export default function MobileLeavePage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase mb-1.5 block">From</label>
-                  <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
-                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none" />
+                  <input
+                    type="date"
+                    value={form.start_date}
+                    onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground uppercase mb-1.5 block">To</label>
-                  <input type="date" value={form.end_date} min={form.start_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
-                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none" />
+                  <input
+                    type="date"
+                    value={form.end_date}
+                    min={form.start_date}
+                    onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                    className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none"
+                  />
                 </div>
               </div>
 
@@ -280,16 +391,25 @@ export default function MobileLeavePage() {
               )}
 
               <div>
-                <label className="text-[10px] text-muted-foreground uppercase mb-1.5 block">Reason (optional)</label>
-                <textarea value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
-                  rows={3} placeholder="Why are you requesting leave?"
-                  className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none resize-none" />
+                <label className="text-[10px] text-muted-foreground uppercase mb-1.5 block">
+                  Reason (optional)
+                </label>
+                <textarea
+                  value={form.reason}
+                  onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+                  rows={3}
+                  placeholder="Why are you requesting leave?"
+                  className="w-full bg-secondary/60 text-foreground text-sm rounded-xl px-3 py-2.5 outline-none resize-none"
+                />
               </div>
             </div>
 
             <div className="px-4 py-3 border-t border-border">
-              <button onClick={submitRequest} disabled={saving}
-                className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+              <button
+                onClick={submitRequest}
+                disabled={saving}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
                 {saving && <Loader2 className="size-4 animate-spin" />}
                 Submit Request
               </button>
