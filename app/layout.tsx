@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
@@ -29,12 +27,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning
-      className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
-      <body className="font-sans antialiased">
+      <body className="antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -47,8 +44,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator) {
-              window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(() => {});
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').catch(function() {});
               });
             }
           `
