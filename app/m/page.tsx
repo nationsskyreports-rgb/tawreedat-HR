@@ -6,11 +6,11 @@ import {
   Home, MapPin, Wallet, User, LogOut, Loader2,
   CheckCircle2, Clock, Megaphone, FileText,
   CalendarCheck, Download, Shield, Briefcase,
-  Users, BarChart3
+  Users, BarChart3, ClipboardList, Timer,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type {
-  Profile, Employee, AttendanceLog, ShiftAssignment, Shift
+  Profile, Employee, AttendanceLog, ShiftAssignment, Shift,
 } from "@/lib/types"
 
 type InstallPromptEvent = Event & {
@@ -97,7 +97,9 @@ export default function MobileHomePage() {
   useEffect(() => { loadData() }, [])
 
   async function logout() {
-    const _scope = (typeof window !== "undefined" && localStorage.getItem("tawreedat_biometric_session")) ? "local" : "global"; await supabase.auth.signOut({ scope: _scope as any })
+    const _scope = (typeof window !== "undefined" && localStorage.getItem("tawreedat_biometric_session"))
+      ? "local" : "global"
+    await supabase.auth.signOut({ scope: _scope as any })
     router.push("/login")
   }
 
@@ -141,8 +143,10 @@ export default function MobileHomePage() {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {!isInstalled && installPrompt && (
-            <button onClick={triggerInstall}
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary text-[10px] font-medium rounded-lg">
+            <button
+              onClick={triggerInstall}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary text-[10px] font-medium rounded-lg"
+            >
               <Download className="size-3" /> Install
             </button>
           )}
@@ -158,8 +162,10 @@ export default function MobileHomePage() {
 
           {/* Install banner */}
           {!isInstalled && (
-            <button onClick={triggerInstall}
-              className="w-full bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-center gap-3 active:bg-primary/15 transition-colors">
+            <button
+              onClick={triggerInstall}
+              className="w-full bg-primary/10 border border-primary/30 rounded-xl p-3 flex items-center gap-3 active:bg-primary/15 transition-colors"
+            >
               <div className="size-9 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
                 <Download className="size-4 text-primary" />
               </div>
@@ -175,37 +181,40 @@ export default function MobileHomePage() {
           {/* Greeting */}
           {(() => {
             const now = new Date()
-            const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 18 ? "Good afternoon" : "Good evening"
+            const greeting = now.getHours() < 12 ? "Good morning"
+              : now.getHours() < 18 ? "Good afternoon" : "Good evening"
             const name = (profile?.full_name ?? "").split(" ")[0] || "..."
             return (
               <div>
                 <p className="text-xs text-muted-foreground">{greeting},</p>
                 <p className="text-lg font-semibold text-foreground">{name} 👋</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                  {new Date().toLocaleDateString("en-GB", {
+                    weekday: "long", day: "numeric", month: "long",
+                  })}
                 </p>
               </div>
             )
           })()}
 
-          {/* Admin/HR/Manager — Admin Quick Actions */}
+          {/* Admin/HR/Manager quick access */}
           {isAdminRole && (
             <div className="bg-card border border-border rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 {role === "admin" && <Shield className="size-4 text-destructive" />}
-                {role === "hr" && <Briefcase className="size-4 text-primary" />}
+                {role === "hr"    && <Briefcase className="size-4 text-primary" />}
                 {role === "manager" && <Users className="size-4 text-chart-2" />}
                 <p className="text-xs font-semibold text-foreground capitalize">{role} Access</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <QuickAction icon={Users} label="Employees" sublabel="Manage staff"
-                  color="text-primary" bg="bg-primary/10" onClick={() => window.location.href = "/"} />
-                <QuickAction icon={BarChart3} label="Reports" sublabel="View attendance"
-                  color="text-chart-3" bg="bg-chart-3/10" onClick={() => window.location.href = "/"} />
+                <QuickAction icon={Users}        label="Employees"    sublabel="Manage staff"
+                  color="text-primary"   bg="bg-primary/10"   onClick={() => window.location.href = "/"} />
+                <QuickAction icon={BarChart3}    label="Reports"      sublabel="View attendance"
+                  color="text-chart-3"   bg="bg-chart-3/10"   onClick={() => window.location.href = "/"} />
                 <QuickAction icon={CalendarCheck} label="Leave Requests" sublabel={`${pendingLeaves} pending`}
-                  color="text-chart-2" bg="bg-chart-2/10" onClick={() => window.location.href = "/"} />
-                <QuickAction icon={Megaphone} label="Announcements" sublabel="Post update"
-                  color="text-chart-4" bg="bg-chart-4/10" onClick={() => window.location.href = "/"} />
+                  color="text-chart-2"   bg="bg-chart-2/10"   onClick={() => window.location.href = "/"} />
+                <QuickAction icon={Megaphone}    label="Announcements" sublabel="Post update"
+                  color="text-chart-4"   bg="bg-chart-4/10"   onClick={() => window.location.href = "/"} />
               </div>
               <p className="text-[10px] text-muted-foreground text-center mt-3">
                 Tap any item to switch to Desktop view
@@ -248,27 +257,52 @@ export default function MobileHomePage() {
                   <div className="flex items-center justify-between text-xs px-1">
                     <span className="text-muted-foreground">Checked in at</span>
                     <span className="font-mono font-semibold text-foreground">
-                      {new Date(todayCheckin.checkin_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(todayCheckin.checkin_at).toLocaleTimeString("en-GB", {
+                        hour: "2-digit", minute: "2-digit",
+                      })}
                     </span>
                   </div>
                 ) : (
-                  <button onClick={() => router.push("/m/checkin")}
-                    className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold active:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => router.push("/m/checkin")}
+                    className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-semibold active:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                  >
                     <MapPin className="size-4" />
                     Check In Now
                   </button>
                 )}
               </div>
 
+              {/* Quick Actions Grid */}
               <div className="grid grid-cols-2 gap-2.5">
-                <QuickAction icon={CalendarCheck} label="Request Leave" sublabel={`${pendingLeaves} pending`}
-                  color="text-chart-2" bg="bg-chart-2/10" onClick={() => router.push("/m/leave")} />
-                <QuickAction icon={Wallet} label="My Payslip" sublabel="View latest"
-                  color="text-chart-3" bg="bg-chart-3/10" onClick={() => router.push("/m/payslip")} />
-                <QuickAction icon={Megaphone} label="Announcements" sublabel={`${unreadAnnouncements} active`}
-                  color="text-chart-4" bg="bg-chart-4/10" />
-                <QuickAction icon={FileText} label="Documents" sublabel="View your files"
-                  color="text-primary" bg="bg-primary/10" />
+                <QuickAction
+                  icon={ClipboardList} label="Attendance"    sublabel="Time sheet & requests"
+                  color="text-primary"  bg="bg-primary/10"
+                  onClick={() => router.push("/m/attendance")}
+                />
+                <QuickAction
+                  icon={CalendarCheck} label="Leave"          sublabel={`${pendingLeaves} pending`}
+                  color="text-chart-2"  bg="bg-chart-2/10"
+                  onClick={() => router.push("/m/leave")}
+                />
+                <QuickAction
+                  icon={Timer}         label="Overtime"       sublabel="Request or view OT"
+                  color="text-chart-3"  bg="bg-chart-3/10"
+                  onClick={() => router.push("/m/attendance")}
+                />
+                <QuickAction
+                  icon={Wallet}        label="My Payslip"     sublabel="View latest"
+                  color="text-chart-4"  bg="bg-chart-4/10"
+                  onClick={() => router.push("/m/payslip")}
+                />
+                <QuickAction
+                  icon={Megaphone}     label="Announcements"  sublabel={`${unreadAnnouncements} active`}
+                  color="text-chart-2"  bg="bg-chart-2/10"
+                />
+                <QuickAction
+                  icon={FileText}      label="Documents"      sublabel="View your files"
+                  color="text-muted-foreground" bg="bg-secondary"
+                />
               </div>
             </>
           )}
@@ -277,21 +311,27 @@ export default function MobileHomePage() {
         </div>
       </main>
 
-      {/* Bottom Nav */}
-      <nav className="shrink-0 bg-card border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      {/* Bottom Nav (inline — mirrors MobileBottomNav) */}
+      <nav
+        className="shrink-0 bg-card border-t border-border"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="grid grid-cols-5">
           {[
-            { href: "/m",         label: "Home",     icon: Home },
-            { href: "/m/checkin", label: "Check-In", icon: MapPin },
-            { href: "/m/leave",   label: "Leave",    icon: CalendarCheck },
-            { href: "/m/payslip", label: "Payslip",  icon: Wallet },
-            { href: "/m/profile", label: "Profile",  icon: User },
+            { href: "/m",            label: "Home",       icon: Home },
+            { href: "/m/checkin",    label: "Check-In",   icon: MapPin },
+            { href: "/m/attendance", label: "Attendance", icon: ClipboardList },
+            { href: "/m/leave",      label: "Leave",      icon: CalendarCheck },
+            { href: "/m/profile",    label: "Profile",    icon: User },
           ].map(item => {
             const Icon = item.icon
             const isActive = typeof window !== "undefined" && window.location.pathname === item.href
             return (
-              <button key={item.href} onClick={() => router.push(item.href)}
-                className="flex flex-col items-center justify-center py-2 gap-0.5 active:bg-secondary/30 transition-colors">
+              <button
+                key={item.href}
+                onClick={() => router.push(item.href)}
+                className="flex flex-col items-center justify-center py-2 gap-0.5 active:bg-secondary/30 transition-colors"
+              >
                 <Icon className={`size-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                 <span className={`text-[10px] ${isActive ? "text-primary font-medium" : "text-muted-foreground"}`}>
                   {item.label}
@@ -312,8 +352,10 @@ function QuickAction({
   color: string; bg: string; onClick?: () => void
 }) {
   return (
-    <button onClick={onClick}
-      className="bg-card border border-border rounded-2xl p-3 text-left active:bg-secondary/30 transition-colors">
+    <button
+      onClick={onClick}
+      className="bg-card border border-border rounded-2xl p-3 text-left active:bg-secondary/30 transition-colors"
+    >
       <div className={`size-9 rounded-xl ${bg} flex items-center justify-center mb-2`}>
         <Icon className={`size-4 ${color}`} />
       </div>
