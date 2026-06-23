@@ -46,6 +46,8 @@ const navItems = [
   { id: "competences", label: "Competences",       icon: ClipboardCheck },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
+  { id: "my_team",       label: "My Team",         icon: Users },
+  { id: "notifications", label: "Notifications",   icon: Bell  },
 ]
 
 const bottomItems = [
