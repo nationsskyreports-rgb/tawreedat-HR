@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import type { Profile, UserRole } from "@/lib/types"
 import { CompetencesTab } from "@/components/competences-tab"
+import { MyTeamTab }        from "@/components/my-team-tab"
+import { NotificationsTab } from "@/components/notifications-tab"
 
 const alerts = [
   { type: "License Expiry", count: 23, urgency: "high" },
