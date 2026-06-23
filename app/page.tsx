@@ -117,6 +117,8 @@ export default function Page() {
     holidays:      <HolidaysTab />,
     performance:   <PerformanceTab />,
     competences:   <CompetencesTab />,
+    my_team:       <MyTeamTab />,
+    notifications: <NotificationsTab />,
   }
 
   return (
