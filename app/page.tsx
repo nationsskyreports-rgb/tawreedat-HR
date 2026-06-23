@@ -24,6 +24,7 @@ import { Bell, Search, X, Sun, Moon, Shield, Briefcase, User } from "lucide-reac
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
 import type { Profile, UserRole } from "@/lib/types"
+import { CompetencesTab } from "@/components/competences-tab"
 
 const alerts = [
   { type: "License Expiry", count: 23, urgency: "high" },
@@ -113,6 +114,7 @@ export default function Page() {
     documents:     <DocumentsTab />,
     holidays:      <HolidaysTab />,
     performance:   <PerformanceTab />,
+    competences:   <CompetencesTab />,
   }
 
   return (
