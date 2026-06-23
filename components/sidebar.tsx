@@ -21,6 +21,7 @@ import {
   Star,
   Truck,
   ClipboardCheck,
+  Bell,
 } from "lucide-react"
 import { LogoutButton } from "@/components/logout-button"
 
@@ -43,11 +44,11 @@ const navItems = [
   { id: "documents",     label: "Documents",       icon: FileText },
   { id: "holidays",      label: "Holidays",        icon: PartyPopper },
   { id: "performance",   label: "Performance",     icon: Star },
-  { id: "competences", label: "Competences",       icon: ClipboardCheck },
+  { id: "competences",   label: "Competences",     icon: ClipboardCheck },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
   { id: "my_team",       label: "My Team",         icon: Users },
-  { id: "notifications", label: "Notifications",   icon: Bell  },
+  { id: "notifications", label: "Notifications",   icon: Bell },
 ]
 
 const bottomItems = [
