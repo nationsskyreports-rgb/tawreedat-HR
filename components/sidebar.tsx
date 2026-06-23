@@ -43,6 +43,7 @@ const navItems = [
   { id: "documents",     label: "Documents",       icon: FileText },
   { id: "holidays",      label: "Holidays",        icon: PartyPopper },
   { id: "performance",   label: "Performance",     icon: Star },
+  { id: "competences", label: "Competences",       icon: ClipboardCheck },
   { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
 ]
