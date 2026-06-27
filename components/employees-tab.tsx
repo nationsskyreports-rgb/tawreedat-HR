@@ -90,43 +90,61 @@ export function EmployeesTab() {
   const [error, setError] = useState<string | null>(null)
 
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
-  const [probationIds, setProbationIds] = useState<Set<string>>(new Set())
+  const [probationIds,    setProbationIds]    = useState<Set<string>>(new Set())
+  const [attrPeriod,      setAttrPeriod]      = useState<"monthly"|"quarterly"|"semi_annual"|"custom">("monthly")
+  const [attrCustomStart, setAttrCustomStart] = useState("")
+  const [attrCustomEnd,   setAttrCustomEnd]   = useState("")
+  const [showExcluded,    setShowExcluded]    = useState(false)
 
   // ── Attrition helpers ───────────────────────────────────────────────────────
-  function periodRange(p: "monthly" | "quarterly" | "semi_annual"): { start: Date; end: Date } {
-    const now = new Date()
-    const end = new Date(now)
+  function getAttrDates() {
+    const now = new Date(); now.setHours(23,59,59,999)
+    if (attrPeriod === "custom") {
+      if (!attrCustomStart || !attrCustomEnd) return null
+      const s = new Date(attrCustomStart); s.setHours(0,0,0,0)
+      const e = new Date(attrCustomEnd);   e.setHours(23,59,59,999)
+      return { start: s, end: e }
+    }
     let start: Date
-    if (p === "monthly") {
+    if (attrPeriod === "monthly") {
       start = new Date(now.getFullYear(), now.getMonth(), 1)
-    } else if (p === "quarterly") {
+    } else if (attrPeriod === "quarterly") {
       const q = Math.floor(now.getMonth() / 3)
       start = new Date(now.getFullYear(), q * 3, 1)
     } else {
       start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
     }
-    return { start, end }
+    start.setHours(0,0,0,0)
+    return { start, end: now }
   }
 
-  function calcAttrition(emps: Employee[], period: "monthly" | "quarterly" | "semi_annual", excIds: Set<string>) {
-    const { start, end } = periodRange(period)
-    const excluded = (e: Employee) => excIds.has(e.id) || e.contract_type === "probation"
+  function calcAttrition(emps: Employee[], excIds: Set<string>) {
+    const dates = getAttrDates()
+    if (!dates) return null
+    const { start, end } = dates
+    const isExcluded = (e: Employee) => excIds.has(e.id) || e.contract_type === "probation"
     const activeAtStart = emps.filter(e => {
-      if (excluded(e)) return false
+      if (isExcluded(e)) return false
       const hire = e.hire_date ? new Date(e.hire_date) : null
       const term = e.termination_date ? new Date(e.termination_date) : null
       return hire && hire <= start && (!term || term >= start)
     })
     const left = emps.filter(e => {
-      if (excluded(e)) return false
+      if (isExcluded(e)) return false
       const term = e.termination_date ? new Date(e.termination_date) : null
-      return (
-        term && term >= start && term <= end &&
-        (e.status === "terminated" || e.status === "resigned")
-      )
+      return term && term >= start && term <= end && (e.status === "terminated" || e.status === "resigned")
     })
+    const excluded = emps.filter(e => isExcluded(e))
     const hc = activeAtStart.length
-    return { left: left.length, headcount: hc, rate: hc > 0 ? (left.length / hc) * 100 : 0 }
+    return {
+      left:         left.length,
+      leftList:     left,
+      headcount:    hc,
+      rate:         hc > 0 ? (left.length / hc) * 100 : 0,
+      excludedList: excluded,
+      start,
+      end,
+    }
   }
 
   async function loadAll() {
@@ -320,31 +338,124 @@ export function EmployeesTab() {
       </div>
 
       {/* ── Attrition Overview ────────────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attrition Overview</p>
-          <span className="text-[10px] text-muted-foreground italic">Excludes probation employees</span>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attrition Overview</p>
+
+        {/* Period selector */}
+        <div className="flex items-center gap-2 flex-wrap">
           {([
-            { label: "This Month",   period: "monthly"      as const },
-            { label: "This Quarter", period: "quarterly"    as const },
-            { label: "Last 6 Months",period: "semi_annual"  as const },
-          ]).map(({ label, period }) => {
-            const a = calcAttrition(employees, period, probationIds)
-            return (
-              <div key={period} className="bg-secondary/40 rounded-lg p-3 text-center">
-                <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
-                <p className={`text-xl font-bold font-mono ${a.rate > 5 ? "text-destructive" : a.rate > 2 ? "text-chart-2" : "text-foreground"}`}>
-                  {a.rate.toFixed(1)}%
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {a.left} left / {a.headcount} headcount
-                </p>
-              </div>
-            )
-          })}
+            { key: "monthly",      label: "This Month"   },
+            { key: "quarterly",    label: "This Quarter" },
+            { key: "semi_annual",  label: "Last 6 Months"},
+            { key: "custom",       label: "Custom Range" },
+          ] as const).map(p => (
+            <button
+              key={p.key}
+              onClick={() => setAttrPeriod(p.key)}
+              className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
+                attrPeriod === p.key
+                  ? "bg-primary/15 text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+          {attrPeriod === "custom" && (
+            <div className="flex items-center gap-2 ml-1">
+              <input
+                type="date"
+                value={attrCustomStart}
+                onChange={e => setAttrCustomStart(e.target.value)}
+                className="bg-secondary/60 text-foreground text-xs rounded-lg px-2 py-1.5 outline-none border border-transparent focus:border-primary"
+              />
+              <span className="text-xs text-muted-foreground">→</span>
+              <input
+                type="date"
+                value={attrCustomEnd}
+                onChange={e => setAttrCustomEnd(e.target.value)}
+                className="bg-secondary/60 text-foreground text-xs rounded-lg px-2 py-1.5 outline-none border border-transparent focus:border-primary"
+              />
+            </div>
+          )}
         </div>
+
+        {/* Result */}
+        {(() => {
+          const a = calcAttrition(employees, probationIds)
+          if (!a) return (
+            <p className="text-xs text-muted-foreground py-2">اختار التاريخين عشان يحسب</p>
+          )
+          return (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-secondary/40 rounded-lg p-3 text-center">
+                  <p className="text-[11px] text-muted-foreground mb-1">Attrition Rate</p>
+                  <p className={`text-2xl font-bold font-mono ${a.rate > 5 ? "text-destructive" : a.rate > 2 ? "text-chart-2" : "text-foreground"}`}>
+                    {a.rate.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="bg-secondary/40 rounded-lg p-3 text-center">
+                  <p className="text-[11px] text-muted-foreground mb-1">Employees Left</p>
+                  <p className="text-2xl font-bold font-mono text-foreground">{a.left}</p>
+                  {a.leftList.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {a.leftList.map(e => (
+                        <p key={e.id} className="text-[10px] text-muted-foreground truncate">{e.full_name}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-secondary/40 rounded-lg p-3 text-center">
+                  <p className="text-[11px] text-muted-foreground mb-1">Headcount (start)</p>
+                  <p className="text-2xl font-bold font-mono text-foreground">{a.headcount}</p>
+                </div>
+              </div>
+
+              {/* Excluded transparency */}
+              <button
+                onClick={() => setShowExcluded(v => !v)}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className={`transition-transform ${showExcluded ? "rotate-90" : ""}`}>▶</span>
+                <span>
+                  {a.excludedList.length === 0
+                    ? "No employees excluded (0 in probation)"
+                    : `${a.excludedList.length} ${a.excludedList.length === 1 ? "employee" : "employees"} excluded from calculation — in probation`
+                  }
+                </span>
+                {a.excludedList.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-chart-2/15 text-chart-2 text-[10px] font-semibold ml-1">
+                    {a.excludedList.length}
+                  </span>
+                )}
+              </button>
+
+              {showExcluded && a.excludedList.length > 0 && (
+                <div className="border border-border/60 rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-12 text-[10px] font-medium text-muted-foreground uppercase tracking-wide px-3 py-2 border-b border-border/60 bg-secondary/20">
+                    <span className="col-span-2">Emp No</span>
+                    <span className="col-span-4">Name</span>
+                    <span className="col-span-3">Contract Type</span>
+                    <span className="col-span-3">Status</span>
+                  </div>
+                  {a.excludedList.map(e => (
+                    <div key={e.id} className="grid grid-cols-12 px-3 py-2 border-b border-border/40 text-xs items-center last:border-0">
+                      <span className="col-span-2 font-mono text-muted-foreground">{e.employee_no}</span>
+                      <span className="col-span-4 text-foreground">{e.full_name}</span>
+                      <span className="col-span-3">
+                        <span className="px-1.5 py-0.5 rounded bg-chart-2/15 text-chart-2 text-[10px] font-medium">
+                          {e.contract_type}
+                        </span>
+                      </span>
+                      <span className="col-span-3 text-muted-foreground capitalize">{e.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       <Card className="border-border bg-card">
