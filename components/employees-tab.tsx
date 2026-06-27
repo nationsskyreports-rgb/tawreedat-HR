@@ -89,20 +89,60 @@ export function EmployeesTab() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingId,   setDeletingId]   = useState<string | null>(null)
+  const [probationIds, setProbationIds] = useState<Set<string>>(new Set())
+
+  // ── Attrition helpers ───────────────────────────────────────────────────────
+  function periodRange(p: "monthly" | "quarterly" | "semi_annual"): { start: Date; end: Date } {
+    const now = new Date()
+    const end = new Date(now)
+    let start: Date
+    if (p === "monthly") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1)
+    } else if (p === "quarterly") {
+      const q = Math.floor(now.getMonth() / 3)
+      start = new Date(now.getFullYear(), q * 3, 1)
+    } else {
+      start = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+    }
+    return { start, end }
+  }
+
+  function calcAttrition(emps: Employee[], period: "monthly" | "quarterly" | "semi_annual", excIds: Set<string>) {
+    const { start, end } = periodRange(period)
+    const excluded = (e: Employee) => excIds.has(e.id) || e.contract_type === "probation"
+    const activeAtStart = emps.filter(e => {
+      if (excluded(e)) return false
+      const hire = e.hire_date ? new Date(e.hire_date) : null
+      const term = e.termination_date ? new Date(e.termination_date) : null
+      return hire && hire <= start && (!term || term >= start)
+    })
+    const left = emps.filter(e => {
+      if (excluded(e)) return false
+      const term = e.termination_date ? new Date(e.termination_date) : null
+      return (
+        term && term >= start && term <= end &&
+        (e.status === "terminated" || e.status === "resigned")
+      )
+    })
+    const hc = activeAtStart.length
+    return { left: left.length, headcount: hc, rate: hc > 0 ? (left.length / hc) * 100 : 0 }
+  }
 
   async function loadAll() {
     setLoading(true)
-    const [empRes, deptRes, posRes, siteRes] = await Promise.all([
+    const [empRes, deptRes, posRes, siteRes, probRes] = await Promise.all([
       supabase.from("employees").select("*").order("created_at", { ascending: false }),
       supabase.from("departments").select("*").eq("is_active", true).order("name"),
       supabase.from("positions").select("*").eq("is_active", true).order("title"),
       supabase.from("sites").select("*").eq("is_active", true).order("name"),
+      supabase.from("probation_records").select("employee_id, status").in("status", ["ongoing", "extended"]),
     ])
     setEmployees((empRes.data ?? []) as Employee[])
     setDepartments((deptRes.data ?? []) as Department[])
     setPositions((posRes.data ?? []) as Position[])
     setSites((siteRes.data ?? []) as Site[])
+    setProbationIds(new Set((probRes.data ?? []).map((p: any) => p.employee_id as string)))
     setLoading(false)
   }
 
@@ -279,6 +319,34 @@ export function EmployeesTab() {
         </div>
       </div>
 
+      {/* ── Attrition Overview ────────────────────────────────────────────── */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attrition Overview</p>
+          <span className="text-[10px] text-muted-foreground italic">Excludes probation employees</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {([
+            { label: "This Month",   period: "monthly"      as const },
+            { label: "This Quarter", period: "quarterly"    as const },
+            { label: "Last 6 Months",period: "semi_annual"  as const },
+          ]).map(({ label, period }) => {
+            const a = calcAttrition(employees, period, probationIds)
+            return (
+              <div key={period} className="bg-secondary/40 rounded-lg p-3 text-center">
+                <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
+                <p className={`text-xl font-bold font-mono ${a.rate > 5 ? "text-destructive" : a.rate > 2 ? "text-chart-2" : "text-foreground"}`}>
+                  {a.rate.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {a.left} left / {a.headcount} headcount
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       <Card className="border-border bg-card">
         <CardContent className="p-0">
           <div className="grid grid-cols-12 text-xs text-muted-foreground px-4 py-3 border-b border-border">
@@ -312,8 +380,11 @@ export function EmployeesTab() {
                     <Badge variant="secondary" className={`text-xs ${cat.color}`}>{cat.label}</Badge>
                   </div>
                   <span className="col-span-2 text-xs text-muted-foreground truncate">{emp.phone ?? "—"}</span>
-                  <div className="col-span-2">
+                  <div className="col-span-2 flex items-center gap-1.5 flex-wrap">
                     <Badge variant="secondary" className={`text-xs ${stat.color}`}>{stat.label}</Badge>
+                    {emp.contract_type === "probation" && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-chart-2/15 text-chart-2 font-semibold tracking-wide">PROB</span>
+                    )}
                   </div>
                   <div className="col-span-1 flex items-center justify-end gap-1">
                     <button
