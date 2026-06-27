@@ -1,7 +1,22 @@
 import type { Metadata, Viewport } from "next"
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+})
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+  weight: ["400", "500", "600"],
+})
 
 export const metadata: Metadata = {
   title: "Tawreedat HRIS",
@@ -31,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
-      <body className="antialiased">
+      <body className={`${jakarta.variable} ${mono.variable} antialiased font-sans`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
