@@ -27,6 +27,7 @@ import type { Profile, UserRole } from "@/lib/types"
 import { CompetencesTab } from "@/components/competences-tab"
 import { MyTeamTab }        from "@/components/my-team-tab"
 import { NotificationsTab } from "@/components/notifications-tab"
+import { ProbationTab }     from "@/components/probation-tab"
 
 const alerts = [
   { type: "License Expiry", count: 23, urgency: "high" },
@@ -117,6 +118,7 @@ export default function Page() {
     holidays:      <HolidaysTab />,
     performance:   <PerformanceTab />,
     competences:   <CompetencesTab />,
+    probation:     <ProbationTab />,
     my_team:       <MyTeamTab />,
     notifications: <NotificationsTab />,
   }
