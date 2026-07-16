@@ -167,7 +167,29 @@ function LoginPageInner() {
     <div className="min-h-screen flex bg-background">
 
       {/* ═══ LEFT: original login form (untouched) ═══ */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 relative">
+
+        {/* SoloTec badge — top left */}
+        <div
+          className="absolute top-5 left-5 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl select-none"
+          style={{ background: 'linear-gradient(135deg, #0D1626 0%, #0B1120 100%)', boxShadow: '0 8px 24px rgba(5, 10, 20, 0.35)' }}
+        >
+          <div className="relative" style={{ width: 30, height: 30 }}>
+            <svg viewBox="0 0 48 48" width="30" height="30">
+              <defs><linearGradient id="stBadgeG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
+              <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="url(#stBadgeG)" strokeWidth="3.5" strokeLinejoin="round" />
+              <text x="24" y="31" textAnchor="middle" fontSize="19" fontWeight="800" fill="url(#stBadgeG)" fontFamily="Arial, sans-serif">S</text>
+            </svg>
+            <span
+              className="absolute rounded-full"
+              style={{ top: -2, right: -2, width: 8, height: 8, background: '#34E8A5', boxShadow: '0 0 10px rgba(52, 232, 165, 0.9)' }}
+            />
+          </div>
+          <span className="text-lg font-extrabold tracking-tight" style={{ color: '#F8FAFC' }}>
+            SoloTe<span style={{ color: '#34E8A5' }}>c</span>
+          </span>
+        </div>
+
       <div className="w-full max-w-sm">
 
         {/* Logo */}
