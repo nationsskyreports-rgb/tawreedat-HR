@@ -164,7 +164,10 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
+    <div className="min-h-screen flex bg-background">
+
+      {/* ═══ LEFT: original login form (untouched) ═══ */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm">
 
         {/* Logo */}
@@ -531,6 +534,113 @@ function LoginPageInner() {
         <p className="text-[10px] text-muted-foreground text-center mt-8">
           © {new Date().getFullYear()} Tawreedat HRIS
         </p>
+      </div>
+      </div>
+
+      {/* ═══ RIGHT: SoloTec side (decorative, desktop only) ═══ */}
+      <div
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col items-center justify-center gap-9"
+        style={{ background: 'radial-gradient(ellipse at 30% 20%, #10243E 0%, #0B1120 55%, #060B16 100%)' }}
+        aria-hidden="true"
+      >
+        {/* aurora */}
+        <div className="st-aurora st-aurora-teal" />
+        <div className="st-aurora st-aurora-blue" />
+
+        {/* stars */}
+        <div className="st-stars">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <span key={i} style={{
+              left: `${(i * 37) % 100}%`,
+              top: `${(i * 53) % 100}%`,
+              animationDelay: `${(i % 10) * 0.55}s`,
+              width: i % 5 === 0 ? '2.5px' : '1.8px',
+              height: i % 5 === 0 ? '2.5px' : '1.8px',
+            }} />
+          ))}
+        </div>
+
+        {/* grid floor */}
+        <div className="st-grid-floor" />
+
+        {/* hex core */}
+        <div className="st-hex-core">
+          <svg className="st-hex st-hex-outer" viewBox="0 0 200 200">
+            <path d="M100 10 L178 55 V145 L100 190 L22 145 V55 Z" fill="none" stroke="url(#stGradA)" strokeWidth="1.2" strokeLinejoin="round" opacity="0.5" />
+            <defs><linearGradient id="stGradA" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
+          </svg>
+          <svg className="st-hex st-hex-mid" viewBox="0 0 200 200">
+            <path d="M100 26 L164 63 V137 L100 174 L36 137 V63 Z" fill="none" stroke="url(#stGradB)" strokeWidth="2" strokeLinejoin="round" opacity="0.75" />
+            <defs><linearGradient id="stGradB" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#22D3EE" /><stop offset="100%" stopColor="#34E8A5" /></linearGradient></defs>
+          </svg>
+          <svg className="st-hex st-hex-inner" viewBox="0 0 200 200">
+            <defs><linearGradient id="stGradC" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
+            <path d="M100 44 L148 72 V128 L100 156 L52 128 V72 Z" fill="none" stroke="url(#stGradC)" strokeWidth="4" strokeLinejoin="round" />
+            <text x="100" y="122" textAnchor="middle" fontSize="58" fontWeight="800" fill="url(#stGradC)" fontFamily="Arial, sans-serif">S</text>
+          </svg>
+          <div className="st-orbit"><span className="st-orbit-dot" /></div>
+          <div className="st-hex-glow" />
+        </div>
+
+        {/* hero text */}
+        <div className="st-hero-text">
+          <h2>Your entire workforce, <span className="st-grad-text">one platform</span></h2>
+          <p>Attendance, payroll, leaves and shift rosters — everything HR needs to run logistics teams, in one place.</p>
+          <div className="st-powered">
+            <svg viewBox="0 0 48 48" width="18" height="18">
+              <defs><linearGradient id="stLogoG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
+              <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="url(#stLogoG)" strokeWidth="3.5" strokeLinejoin="round" />
+              <text x="24" y="31" textAnchor="middle" fontSize="19" fontWeight="800" fill="url(#stLogoG)" fontFamily="Arial, sans-serif">S</text>
+            </svg>
+            <span>Powered by <b>SoloTe<i>c</i></b></span>
+          </div>
+        </div>
+
+        <style jsx>{`
+          .st-aurora { position: absolute; border-radius: 9999px; filter: blur(110px); opacity: 0.32; pointer-events: none; }
+          .st-aurora-teal { width: 620px; height: 620px; background: radial-gradient(circle, rgba(20,120,110,0.4) 0%, transparent 65%); top: -180px; right: -100px; animation: stDrift1 24s ease-in-out infinite; }
+          .st-aurora-blue { width: 520px; height: 520px; background: radial-gradient(circle, rgba(18,59,122,0.5) 0%, transparent 65%); bottom: -160px; left: -100px; animation: stDrift2 28s ease-in-out infinite; }
+          @keyframes stDrift1 { 0%, 100% { transform: translate(0, 0) } 50% { transform: translate(-60px, 45px) } }
+          @keyframes stDrift2 { 0%, 100% { transform: translate(0, 0) } 50% { transform: translate(55px, -40px) } }
+
+          .st-stars { position: absolute; inset: 0; pointer-events: none; }
+          .st-stars :global(span) { position: absolute; background: #7DD3FC; border-radius: 9999px; opacity: 0.2; animation: stTwinkle 6s ease-in-out infinite; }
+          @keyframes stTwinkle { 0%, 100% { opacity: 0.12; transform: scale(1); } 50% { opacity: 0.65; transform: scale(1.4); } }
+
+          .st-grid-floor {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 42vh;
+            background-image: linear-gradient(rgba(52, 232, 165, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(52, 232, 165, 0.04) 1px, transparent 1px);
+            background-size: 54px 54px;
+            transform: perspective(600px) rotateX(58deg); transform-origin: bottom;
+            mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.65), transparent);
+            -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.65), transparent);
+            pointer-events: none;
+          }
+
+          .st-hex-core { position: relative; width: 360px; height: 360px; z-index: 1; }
+          .st-hex { position: absolute; inset: 0; width: 100%; height: 100%; }
+          .st-hex-outer { animation: stSpin 40s linear infinite; }
+          .st-hex-mid { animation: stSpinRev 28s linear infinite; }
+          .st-hex-inner { animation: stBreathe 7s ease-in-out infinite; filter: drop-shadow(0 0 26px rgba(52, 232, 165, 0.35)); }
+          @keyframes stSpin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+          @keyframes stSpinRev { from { transform: rotate(360deg) } to { transform: rotate(0deg) } }
+          @keyframes stBreathe { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.05) } }
+          .st-orbit { position: absolute; inset: -14px; animation: stSpin 12s linear infinite; }
+          .st-orbit-dot { position: absolute; top: 6px; left: 50%; width: 10px; height: 10px; margin-left: -5px; border-radius: 9999px; background: #34E8A5; box-shadow: 0 0 16px rgba(52, 232, 165, 0.9), 0 0 36px rgba(52, 232, 165, 0.4); }
+          .st-hex-glow { position: absolute; inset: 20%; border-radius: 9999px; background: radial-gradient(circle, rgba(52, 232, 165, 0.1) 0%, transparent 70%); animation: stBreathe 7s ease-in-out infinite; }
+
+          .st-hero-text { text-align: center; max-width: 460px; position: relative; z-index: 1; padding: 0 24px; }
+          .st-hero-text h2 { color: #F1F5F9; font-size: 26px; font-weight: 800; line-height: 1.35; margin: 0 0 10px; letter-spacing: -0.3px; }
+          .st-grad-text { background: linear-gradient(90deg, #34E8A5, #3B82F6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+          .st-hero-text p { color: #64748B; font-size: 13.5px; margin: 0 0 22px; line-height: 1.6; }
+          .st-powered { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(52, 232, 165, 0.18); color: #64748B; font-size: 12.5px; }
+          .st-powered b { color: #E2E8F0; font-weight: 800; }
+          .st-powered b :global(i) { color: #34E8A5; font-style: normal; }
+
+          @media (prefers-reduced-motion: reduce) {
+            .st-aurora, .st-stars :global(span), .st-hex, .st-orbit, .st-hex-glow { animation: none !important; }
+          }
+        `}</style>
       </div>
     </div>
   )
