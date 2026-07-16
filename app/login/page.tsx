@@ -177,27 +177,6 @@ function LoginPageInner() {
         <div className="tw-glow tw-glow-bottom" aria-hidden="true" />
         <div className="tw-dots" aria-hidden="true" />
 
-        {/* SoloTec badge — top left */}
-        <div
-          className="absolute top-5 left-5 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl select-none"
-          style={{ background: 'linear-gradient(135deg, #0D1626 0%, #0B1120 100%)', boxShadow: '0 8px 24px rgba(5, 10, 20, 0.35)' }}
-        >
-          <div className="relative st-badge-logo" style={{ width: 30, height: 30 }}>
-            <svg viewBox="0 0 48 48" width="30" height="30">
-              <defs><linearGradient id="stBadgeG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
-              <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="url(#stBadgeG)" strokeWidth="3.5" strokeLinejoin="round" />
-              <text x="24" y="31" textAnchor="middle" fontSize="19" fontWeight="800" fill="url(#stBadgeG)" fontFamily="Arial, sans-serif">S</text>
-            </svg>
-            <span
-              className="absolute rounded-full st-pulse-dot"
-              style={{ top: -2, right: -2, width: 8, height: 8, background: '#34E8A5' }}
-            />
-          </div>
-          <span className="text-lg font-extrabold tracking-tight" style={{ color: '#F8FAFC' }}>
-            SoloTe<span style={{ color: '#34E8A5' }}>c</span>
-          </span>
-        </div>
-
       <style jsx>{`
         .tw-glow {
           position: absolute;
@@ -206,15 +185,15 @@ function LoginPageInner() {
           pointer-events: none;
         }
         .tw-glow-top {
-          width: 560px; height: 560px;
-          background: radial-gradient(circle, rgba(249, 115, 22, 0.32) 0%, rgba(249, 115, 22, 0.1) 40%, transparent 68%);
-          top: -160px; right: -120px;
+          width: 640px; height: 640px;
+          background: radial-gradient(circle, rgba(249, 115, 22, 0.5) 0%, rgba(249, 115, 22, 0.18) 40%, transparent 70%);
+          top: -180px; right: -140px;
           animation: twDrift 22s ease-in-out infinite;
         }
         .tw-glow-bottom {
-          width: 500px; height: 500px;
-          background: radial-gradient(circle, rgba(251, 146, 60, 0.28) 0%, rgba(251, 146, 60, 0.08) 40%, transparent 68%);
-          bottom: -140px; left: -110px;
+          width: 580px; height: 580px;
+          background: radial-gradient(circle, rgba(251, 146, 60, 0.45) 0%, rgba(251, 146, 60, 0.15) 40%, transparent 70%);
+          bottom: -160px; left: -130px;
           animation: twDrift 26s ease-in-out infinite reverse;
         }
         @keyframes twDrift {
@@ -224,10 +203,14 @@ function LoginPageInner() {
         .tw-dots {
           position: absolute;
           inset: 0;
-          background-image: radial-gradient(circle, rgba(249, 115, 22, 0.18) 1.2px, transparent 1.2px);
-          background-size: 28px 28px;
-          mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, transparent 45%, black 100%);
-          -webkit-mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, transparent 45%, black 100%);
+          background-image:
+            linear-gradient(rgba(249, 115, 22, 0.13) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(249, 115, 22, 0.13) 1px, transparent 1px),
+            radial-gradient(circle, rgba(249, 115, 22, 0.35) 1.5px, transparent 1.5px);
+          background-size: 44px 44px, 44px 44px, 44px 44px;
+          background-position: 0 0, 0 0, 0 0;
+          mask-image: radial-gradient(ellipse 85% 85% at 50% 45%, rgba(0,0,0,0.35) 30%, black 100%);
+          -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 45%, rgba(0,0,0,0.35) 30%, black 100%);
           pointer-events: none;
         }
 
@@ -641,6 +624,24 @@ function LoginPageInner() {
         style={{ background: 'radial-gradient(ellipse at 30% 20%, #10243E 0%, #0B1120 55%, #060B16 100%)' }}
         aria-hidden="true"
       >
+        {/* SoloTec badge — top left of dark side */}
+        <div className="absolute top-6 left-8 flex items-center gap-2.5 select-none z-10">
+          <div className="relative st-badge-logo" style={{ width: 32, height: 32 }}>
+            <svg viewBox="0 0 48 48" width="32" height="32">
+              <defs><linearGradient id="stBadgeG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
+              <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="url(#stBadgeG)" strokeWidth="3.5" strokeLinejoin="round" />
+              <text x="24" y="31" textAnchor="middle" fontSize="19" fontWeight="800" fill="url(#stBadgeG)" fontFamily="Arial, sans-serif">S</text>
+            </svg>
+            <span
+              className="absolute rounded-full st-pulse-dot"
+              style={{ top: -2, right: -2, width: 8, height: 8, background: '#34E8A5' }}
+            />
+          </div>
+          <span className="text-xl font-extrabold tracking-tight" style={{ color: '#F8FAFC' }}>
+            SoloTe<span style={{ color: '#34E8A5' }}>c</span>
+          </span>
+        </div>
+
         {/* aurora */}
         <div className="st-aurora st-aurora-teal" />
         <div className="st-aurora st-aurora-blue" />
