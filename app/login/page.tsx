@@ -167,7 +167,10 @@ function LoginPageInner() {
     <div className="min-h-screen flex bg-background">
 
       {/* ═══ LEFT: original login form (untouched) ═══ */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 relative overflow-hidden">
+      <div
+        className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 relative overflow-hidden"
+        style={{ background: 'linear-gradient(160deg, rgba(249, 115, 22, 0.07) 0%, transparent 35%, transparent 60%, rgba(251, 146, 60, 0.09) 100%)' }}
+      >
 
         {/* warm orange ambience — matches Tawreedat brand */}
         <div className="tw-glow tw-glow-top" aria-hidden="true" />
@@ -203,15 +206,15 @@ function LoginPageInner() {
           pointer-events: none;
         }
         .tw-glow-top {
-          width: 420px; height: 420px;
-          background: radial-gradient(circle, rgba(249, 115, 22, 0.13) 0%, transparent 65%);
-          top: -140px; right: -100px;
+          width: 560px; height: 560px;
+          background: radial-gradient(circle, rgba(249, 115, 22, 0.32) 0%, rgba(249, 115, 22, 0.1) 40%, transparent 68%);
+          top: -160px; right: -120px;
           animation: twDrift 22s ease-in-out infinite;
         }
         .tw-glow-bottom {
-          width: 380px; height: 380px;
-          background: radial-gradient(circle, rgba(251, 146, 60, 0.1) 0%, transparent 65%);
-          bottom: -120px; left: -90px;
+          width: 500px; height: 500px;
+          background: radial-gradient(circle, rgba(251, 146, 60, 0.28) 0%, rgba(251, 146, 60, 0.08) 40%, transparent 68%);
+          bottom: -140px; left: -110px;
           animation: twDrift 26s ease-in-out infinite reverse;
         }
         @keyframes twDrift {
@@ -221,10 +224,10 @@ function LoginPageInner() {
         .tw-dots {
           position: absolute;
           inset: 0;
-          background-image: radial-gradient(circle, rgba(249, 115, 22, 0.07) 1px, transparent 1px);
-          background-size: 30px 30px;
-          mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, black 100%);
-          -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, black 100%);
+          background-image: radial-gradient(circle, rgba(249, 115, 22, 0.18) 1.2px, transparent 1.2px);
+          background-size: 28px 28px;
+          mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, transparent 45%, black 100%);
+          -webkit-mask-image: radial-gradient(ellipse 62% 62% at 50% 48%, transparent 45%, black 100%);
           pointer-events: none;
         }
 
