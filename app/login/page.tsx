@@ -167,28 +167,101 @@ function LoginPageInner() {
     <div className="min-h-screen flex bg-background">
 
       {/* ═══ LEFT: original login form (untouched) ═══ */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 relative">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8 relative overflow-hidden">
+
+        {/* warm orange ambience — matches Tawreedat brand */}
+        <div className="tw-glow tw-glow-top" aria-hidden="true" />
+        <div className="tw-glow tw-glow-bottom" aria-hidden="true" />
+        <div className="tw-dots" aria-hidden="true" />
 
         {/* SoloTec badge — top left */}
         <div
           className="absolute top-5 left-5 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl select-none"
           style={{ background: 'linear-gradient(135deg, #0D1626 0%, #0B1120 100%)', boxShadow: '0 8px 24px rgba(5, 10, 20, 0.35)' }}
         >
-          <div className="relative" style={{ width: 30, height: 30 }}>
+          <div className="relative st-badge-logo" style={{ width: 30, height: 30 }}>
             <svg viewBox="0 0 48 48" width="30" height="30">
               <defs><linearGradient id="stBadgeG" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#34E8A5" /><stop offset="100%" stopColor="#3B82F6" /></linearGradient></defs>
               <path d="M24 3 L42 13.5 V34.5 L24 45 L6 34.5 V13.5 Z" fill="none" stroke="url(#stBadgeG)" strokeWidth="3.5" strokeLinejoin="round" />
               <text x="24" y="31" textAnchor="middle" fontSize="19" fontWeight="800" fill="url(#stBadgeG)" fontFamily="Arial, sans-serif">S</text>
             </svg>
             <span
-              className="absolute rounded-full"
-              style={{ top: -2, right: -2, width: 8, height: 8, background: '#34E8A5', boxShadow: '0 0 10px rgba(52, 232, 165, 0.9)' }}
+              className="absolute rounded-full st-pulse-dot"
+              style={{ top: -2, right: -2, width: 8, height: 8, background: '#34E8A5' }}
             />
           </div>
           <span className="text-lg font-extrabold tracking-tight" style={{ color: '#F8FAFC' }}>
             SoloTe<span style={{ color: '#34E8A5' }}>c</span>
           </span>
         </div>
+
+      <style jsx>{`
+        .tw-glow {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(90px);
+          pointer-events: none;
+        }
+        .tw-glow-top {
+          width: 420px; height: 420px;
+          background: radial-gradient(circle, rgba(249, 115, 22, 0.13) 0%, transparent 65%);
+          top: -140px; right: -100px;
+          animation: twDrift 22s ease-in-out infinite;
+        }
+        .tw-glow-bottom {
+          width: 380px; height: 380px;
+          background: radial-gradient(circle, rgba(251, 146, 60, 0.1) 0%, transparent 65%);
+          bottom: -120px; left: -90px;
+          animation: twDrift 26s ease-in-out infinite reverse;
+        }
+        @keyframes twDrift {
+          0%, 100% { transform: translate(0, 0); }
+          50%      { transform: translate(-40px, 30px); }
+        }
+        .tw-dots {
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(circle, rgba(249, 115, 22, 0.07) 1px, transparent 1px);
+          background-size: 30px 30px;
+          mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, black 100%);
+          -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, black 100%);
+          pointer-events: none;
+        }
+
+        /* pulsing dot on the SoloTec badge */
+        :global(.st-pulse-dot) {
+          animation: stDotPulse 2.2s ease-in-out infinite;
+        }
+        :global(.st-pulse-dot)::after {
+          content: '';
+          position: absolute;
+          inset: -3px;
+          border-radius: 9999px;
+          border: 1.5px solid rgba(52, 232, 165, 0.6);
+          animation: stDotRing 2.2s ease-out infinite;
+        }
+        @keyframes stDotPulse {
+          0%, 100% { box-shadow: 0 0 6px rgba(52, 232, 165, 0.7); transform: scale(1); }
+          50%      { box-shadow: 0 0 16px rgba(52, 232, 165, 1);  transform: scale(1.25); }
+        }
+        @keyframes stDotRing {
+          0%   { transform: scale(0.8); opacity: 0.8; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        /* breathing glow on the hexagon logo */
+        :global(.st-badge-logo) {
+          animation: stLogoBreathe 3.5s ease-in-out infinite;
+        }
+        @keyframes stLogoBreathe {
+          0%, 100% { filter: drop-shadow(0 0 3px rgba(52, 232, 165, 0.35)); }
+          50%      { filter: drop-shadow(0 0 10px rgba(52, 232, 165, 0.75)); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .tw-glow, :global(.st-pulse-dot), :global(.st-pulse-dot)::after, :global(.st-badge-logo) { animation: none !important; }
+        }
+      `}</style>
 
       <div className="w-full max-w-sm">
 
