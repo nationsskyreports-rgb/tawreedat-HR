@@ -1,14 +1,31 @@
 // Tawreedat HRIS — Biometric Login
-// Strategy: Biometric acts as a GATE to stored credentials
-// The fingerprint/Face ID protects the credentials, not replaces them
-// This approach is reliable regardless of session expiry or logout
+// Strategy: Biometric acts as a GATE to a stored SESSION SNAPSHOT (tokens).
+// ⚠️ We NEVER store the user's password. Tokens are revocable & rotate;
+// a password is permanent — storing it (even base64) was a security hole.
+//
+// Flow:
+//   enable  → verify identity (caller does it) → register platform credential
+//             → snapshot current session tokens behind the gate
+//   sync    → while logged in, keep the snapshot fresh (tokens rotate)
+//   login   → WebAuthn assertion → supabase.auth.setSession(snapshot)
+//             → re-snapshot the rotated tokens
+//   expired → fall back to password login (one-time), snapshot refreshes after
+
+import { supabase } from "@/lib/supabase"
 
 const BIOMETRIC_KEY = "tawreedat_bio"
 
+type SessionSnapshot = {
+  access_token: string
+  refresh_token: string
+}
+
 type StoredCreds = {
   email: string
-  pwd: string // base64 encoded
   credential_id: string
+  session?: SessionSnapshot
+  // legacy field from the old (insecure) format — stripped on read
+  pwd?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -31,24 +48,65 @@ export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
   }
 }
 
-export function hasBiometricSession(): boolean {
-  if (typeof window === "undefined") return false
-  return !!localStorage.getItem(BIOMETRIC_KEY)
-}
-
-export function getStoredEmail(): string | null {
+// ---------------------------------------------------------------------------
+// Storage helpers (with automatic migration off the legacy password format)
+// ---------------------------------------------------------------------------
+function readStore(): StoredCreds | null {
+  if (typeof window === "undefined") return null
   try {
     const raw = localStorage.getItem(BIOMETRIC_KEY)
     if (!raw) return null
     const creds: StoredCreds = JSON.parse(raw)
-    return creds.email
+
+    // MIGRATION: purge any legacy stored password immediately
+    if (creds.pwd) {
+      delete creds.pwd
+      localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(creds))
+    }
+
+    return creds
   } catch {
     return null
   }
 }
 
+function writeStore(creds: StoredCreds): void {
+  if (typeof window === "undefined") return
+  localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(creds))
+}
+
+export function hasBiometricSession(): boolean {
+  return readStore() !== null
+}
+
+export function getStoredEmail(): string | null {
+  return readStore()?.email ?? null
+}
+
 // ---------------------------------------------------------------------------
-// Helpers
+// SYNC — keep the token snapshot fresh while the user is logged in.
+// Call on app load and whenever Supabase refreshes the session.
+// ---------------------------------------------------------------------------
+export async function syncBiometricSession(): Promise<void> {
+  try {
+    const creds = readStore()
+    if (!creds) return
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.refresh_token) return
+
+    creds.session = {
+      access_token:  session.access_token,
+      refresh_token: session.refresh_token,
+    }
+    writeStore(creds)
+  } catch {
+    // best-effort — never block the UI
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Buffer helpers
 // ---------------------------------------------------------------------------
 function bufferToBase64Url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
@@ -68,11 +126,13 @@ function base64UrlToBuffer(base64url: string): ArrayBuffer {
 }
 
 // ---------------------------------------------------------------------------
-// ENABLE — store credentials behind biometric gate
+// ENABLE — register platform credential + snapshot the current session.
+// `password` is accepted for backwards-compatible callers (the profile page
+// verifies it for identity confirmation) but is NEVER stored.
 // ---------------------------------------------------------------------------
 export async function enableBiometricLogin(
   email: string,
-  password: string
+  _password?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     if (!isBiometricSupported()) {
@@ -114,45 +174,56 @@ export async function enableBiometricLogin(
       return { ok: false, error: "Biometric setup was cancelled" }
     }
 
-    // Store credentials protected by biometric registration
-    const creds: StoredCreds = {
+    writeStore({
       email,
-      pwd: btoa(password),
       credential_id: bufferToBase64Url(credential.rawId),
-    }
+    })
 
-    localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(creds))
+    // Snapshot the live session tokens behind the gate
+    await syncBiometricSession()
 
     return { ok: true }
-  } catch (err: any) {
-    if (err?.name === "NotAllowedError") {
+  } catch (err) {
+    const e = err as { name?: string; message?: string }
+    if (e?.name === "NotAllowedError") {
       return { ok: false, error: "Biometric setup was cancelled" }
     }
-    if (err?.name === "InvalidStateError") {
+    if (e?.name === "InvalidStateError") {
       return { ok: false, error: "Biometric already registered on this device" }
     }
-    return { ok: false, error: err?.message ?? "Setup failed" }
+    return { ok: false, error: e?.message ?? "Setup failed" }
   }
 }
 
 // ---------------------------------------------------------------------------
-// AUTHENTICATE — verify biometric then return credentials
+// LOGIN — verify biometric, then restore the session from the snapshot.
 // ---------------------------------------------------------------------------
-export async function getCredentialsViaBiometric(): Promise<
-  | { ok: true; email: string; password: string }
-  | { ok: false; error: string }
+export async function loginWithBiometric(): Promise<
+  | { ok: true }
+  | { ok: false; error: string; needPassword?: boolean }
 > {
   try {
     if (!isBiometricSupported()) {
       return { ok: false, error: "Biometric not supported" }
     }
 
-    const raw = localStorage.getItem(BIOMETRIC_KEY)
-    if (!raw) {
-      return { ok: false, error: "No biometric setup found. Please sign in with email/password first." }
+    const creds = readStore()
+    if (!creds) {
+      return {
+        ok: false,
+        needPassword: true,
+        error: "No biometric setup found. Please sign in with email/password first.",
+      }
     }
 
-    const creds: StoredCreds = JSON.parse(raw)
+    if (!creds.session?.refresh_token) {
+      // Old-format record (password was purged) or snapshot never captured
+      return {
+        ok: false,
+        needPassword: true,
+        error: "Please sign in with your password once to re-link biometric login.",
+      }
+    }
 
     const challenge = new Uint8Array(32)
     crypto.getRandomValues(challenge)
@@ -176,17 +247,35 @@ export async function getCredentialsViaBiometric(): Promise<
       return { ok: false, error: "Biometric verification cancelled" }
     }
 
-    // Biometric verified — return the credentials
-    return {
-      ok: true,
-      email: creds.email,
-      password: atob(creds.pwd),
+    // Biometric verified — restore the session (refreshes/rotates tokens)
+    const { data, error } = await supabase.auth.setSession({
+      access_token:  creds.session.access_token,
+      refresh_token: creds.session.refresh_token,
+    })
+
+    if (error || !data.session) {
+      // Snapshot expired or was revoked — one-time password fallback
+      return {
+        ok: false,
+        needPassword: true,
+        error: "Your session expired. Please sign in with your password once.",
+      }
     }
-  } catch (err: any) {
-    if (err?.name === "NotAllowedError") {
+
+    // Store the ROTATED tokens (old refresh token is now consumed)
+    creds.session = {
+      access_token:  data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    }
+    writeStore(creds)
+
+    return { ok: true }
+  } catch (err) {
+    const e = err as { name?: string; message?: string }
+    if (e?.name === "NotAllowedError") {
       return { ok: false, error: "Biometric cancelled" }
     }
-    return { ok: false, error: err?.message ?? "Biometric verification failed" }
+    return { ok: false, error: e?.message ?? "Biometric verification failed" }
   }
 }
 
