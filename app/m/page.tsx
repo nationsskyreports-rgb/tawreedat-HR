@@ -9,6 +9,7 @@ import {
   Users, BarChart3, ClipboardList, Timer,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { signOutKeepingBiometric } from "@/lib/webauthn"
 import type {
   Profile, Employee, AttendanceLog, ShiftAssignment, Shift,
 } from "@/lib/types"
@@ -97,9 +98,7 @@ export default function MobileHomePage() {
   useEffect(() => { loadData() }, [])
 
   async function logout() {
-    const _scope = (typeof window !== "undefined" && localStorage.getItem("tawreedat_biometric_session"))
-      ? "local" : "global"
-    await supabase.auth.signOut({ scope: _scope as any })
+    await signOutKeepingBiometric()
     router.push("/login")
   }
 
