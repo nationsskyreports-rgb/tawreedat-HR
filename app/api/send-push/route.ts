@@ -54,21 +54,27 @@ export async function POST(req: NextRequest) {
   webpush.setVapidDetails(vapidEmail, vapidPub, vapidPriv)
 
   try {
-    const { user_id, title, body, url } = await req.json() as {
-      user_id: string
-      title:   string
-      body:    string
-      url?:    string
+    const { user_id, user_ids, title, body, url } = await req.json() as {
+      user_id?:  string
+      user_ids?: string[]
+      title:     string
+      body:      string
+      url?:      string
     }
 
-    if (!user_id || !title) {
-      return NextResponse.json({ error: "Missing user_id or title" }, { status: 400 })
+    // Accept a single user_id or a batch of user_ids
+    const targets = (user_ids && user_ids.length > 0)
+      ? user_ids
+      : user_id ? [user_id] : []
+
+    if (targets.length === 0 || !title) {
+      return NextResponse.json({ error: "Missing user_id(s) or title" }, { status: 400 })
     }
 
     const { data: subs, error: dbErr } = await supabaseAdmin
       .from("push_subscriptions")
       .select("endpoint, p256dh, auth")
-      .eq("user_id", user_id)
+      .in("user_id", targets)
 
     if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
     if (!subs || subs.length === 0) return NextResponse.json({ sent: 0 })
