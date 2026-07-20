@@ -117,7 +117,7 @@ export function ProbationTab() {
         .order("created_at", { ascending: false }),
     ])
 
-    const emps = (empRes.data ?? []) as EmpRow[]
+    const emps = (empRes.data ?? []) as unknown as EmpRow[]
     const recs = (recRes.data ?? []) as ProbationRecord[]
     const recMap = new Map(recs.map(r => [r.employee_id, r]))
     const recEmpIds = new Set(recs.map(r => r.employee_id))

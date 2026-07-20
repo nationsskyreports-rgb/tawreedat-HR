@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   MapPin,
   DollarSign,
-  FolderKanban,
   Calendar,
   CalendarCheck,
   Users,
@@ -34,7 +33,6 @@ interface SidebarProps {
 const navItems = [
   { id: "overview",      label: "Overview",        icon: LayoutDashboard },
   { id: "checkin",       label: "Field Check-In",  icon: MapPin },
-  { id: "profitability", label: "Project P&L",     icon: BarChart3 },
   { id: "ats",           label: "AI Recruitment",  icon: Bot },
   { id: "payroll",       label: "Payroll",         icon: DollarSign },
   { id: "leaves",        label: "Leaves",          icon: CalendarCheck },
@@ -47,7 +45,6 @@ const navItems = [
   { id: "performance",   label: "Performance",     icon: Star },
   { id: "competences",   label: "Competences",     icon: ClipboardCheck },
   { id: "probation",     label: "Probation",       icon: Hourglass },
-  { id: "projects",      label: "Projects",        icon: FolderKanban },
   { id: "employees",     label: "Employees",       icon: Users },
   { id: "my_team",       label: "My Team",         icon: Users },
   { id: "notifications", label: "Notifications",   icon: Bell },

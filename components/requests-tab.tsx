@@ -35,9 +35,16 @@ async function notifyEmployee(
 
     if (!profile?.id) return
 
+    // The API now requires the caller's Supabase JWT (HR / admin / manager only)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return
+
     await fetch("/api/send-push", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ user_id: profile.id, title, body, url }),
     })
   } catch {

@@ -4,21 +4,54 @@ import { createClient } from "@supabase/supabase-js"
 
 export const runtime = "nodejs"
 
+// Roles allowed to trigger push notifications to other users
+const ALLOWED_ROLES = ["admin", "hr", "manager"]
+
 export async function POST(req: NextRequest) {
   // ── Lazy init (prevents build-time crash if env vars not yet set) ─────────
   const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey      = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY
   const vapidPub     = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
   const vapidPriv    = process.env.VAPID_PRIVATE_KEY
   const vapidEmail   = process.env.VAPID_EMAIL ?? "mailto:admin@tawreedat.com"
 
-  if (!supabaseUrl || !serviceKey || !vapidPub || !vapidPriv) {
+  if (!supabaseUrl || !anonKey || !serviceKey || !vapidPub || !vapidPriv) {
     return NextResponse.json({ error: "Push notifications not configured" }, { status: 503 })
   }
 
-  webpush.setVapidDetails(vapidEmail, vapidPub, vapidPriv)
+  // ── AUTH: verify the caller's Supabase JWT ────────────────────────────────
+  // Without this check, anyone on the internet could send push notifications
+  // to any employee (phishing risk). The middleware skips /api routes, so the
+  // route must protect itself.
+  const authHeader = req.headers.get("authorization") ?? ""
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null
 
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const supabaseAuth = createClient(supabaseUrl, anonKey)
+  const { data: { user: caller }, error: authErr } = await supabaseAuth.auth.getUser(token)
+
+  if (authErr || !caller) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // ── AUTHZ: only HR / admin / manager may notify other users ───────────────
   const supabaseAdmin = createClient(supabaseUrl, serviceKey)
+
+  const { data: callerProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .single()
+
+  if (!callerProfile || !ALLOWED_ROLES.includes(callerProfile.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  webpush.setVapidDetails(vapidEmail, vapidPub, vapidPriv)
 
   try {
     const { user_id, title, body, url } = await req.json() as {
@@ -53,7 +86,10 @@ export async function POST(req: NextRequest) {
 
     // Remove expired subscriptions (410 Gone)
     const expired = subs
-      .filter((_, i) => (results[i] as any)?.reason?.statusCode === 410)
+      .filter((_, i) => {
+        const r = results[i]
+        return r.status === "rejected" && (r.reason as { statusCode?: number })?.statusCode === 410
+      })
       .map((s) => s.endpoint)
 
     if (expired.length > 0) {
@@ -62,7 +98,8 @@ export async function POST(req: NextRequest) {
 
     const sent = results.filter((r) => r.status === "fulfilled").length
     return NextResponse.json({ sent, failed: results.length - sent })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error"
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
