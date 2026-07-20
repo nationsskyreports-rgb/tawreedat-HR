@@ -10,7 +10,8 @@ import {
 } from "lucide-react"
 import {
   isBiometricSupported, isPlatformAuthenticatorAvailable,
-  getCredentialsViaBiometric, hasBiometricSession, getStoredEmail,
+  loginWithBiometric, hasBiometricSession, getStoredEmail,
+  syncBiometricSession,
 } from "@/lib/webauthn"
 
 type Tab  = "signin" | "signup"
@@ -95,25 +96,18 @@ function LoginPageInner() {
     })
     setLoading(false)
     if (err) { setError(err.message); return }
+    // Refresh the biometric token snapshot after a successful password login
+    await syncBiometricSession()
     routeAfterLogin()
   }
 
   async function handleBiometricLogin() {
     setError(null)
     setBiometricLoading(true)
-    const result = await getCredentialsViaBiometric()
-    if (!result.ok) {
-      setBiometricLoading(false)
-      setError(result.error)
-      return
-    }
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: result.email,
-      password: result.password,
-    })
+    const result = await loginWithBiometric()
     setBiometricLoading(false)
-    if (signInErr) {
-      setError("Biometric login failed. Please sign in with email/password.")
+    if (!result.ok) {
+      setError(result.error)
       return
     }
     routeAfterLogin()
