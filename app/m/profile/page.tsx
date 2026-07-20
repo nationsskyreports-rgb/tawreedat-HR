@@ -12,6 +12,7 @@ import type { Profile, Employee } from "@/lib/types"
 import {
   isBiometricSupported, isPlatformAuthenticatorAvailable,
   enableBiometricLogin, disableBiometric, hasBiometricSession,
+  signOutKeepingBiometric,
   getStoredEmail,
 } from "@/lib/webauthn"
 import { MobileBottomNav } from "@/components/mobile-bottom-nav"
@@ -163,7 +164,7 @@ export default function MobileProfilePage() {
   }
 
   async function logout() {
-    await supabase.auth.signOut({ scope: hasBiometricSession() ? "local" : "global" } as any)
+    await signOutKeepingBiometric()
     router.push("/login")
   }
 
