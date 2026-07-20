@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { LogOut, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ToastContainer } from "@/components/toast"
-import { syncBiometricSession } from "@/lib/webauthn"
+import { syncBiometricSession, signOutKeepingBiometric } from "@/lib/webauthn"
 
 const AWAY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
 
@@ -103,7 +103,7 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
 
   async function handleLogout() {
     setShowLogoutPrompt(false)
-    await supabase.auth.signOut({ scope: "local" } as any)
+    await signOutKeepingBiometric()
     router.push("/login")
   }
 
