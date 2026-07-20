@@ -134,8 +134,29 @@ export function NotificationsTab() {
     }))
 
     const { error } = await supabase.from("notifications").insert(rows)
+    if (error) { setBcSending(false); setBcErr(error.message); return }
+
+    // Push to devices too (best-effort)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.access_token) {
+        await fetch("/api/send-push", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            user_ids: profiles.map(p => p.id),
+            title:    bcTitle.trim(),
+            body:     (bcMessage.trim() || "").slice(0, 120),
+            url:      "/m/notifications",
+          }),
+        })
+      }
+    } catch { /* best-effort */ }
+
     setBcSending(false)
-    if (error) { setBcErr(error.message); return }
 
     setBcTitle(""); setBcMessage(""); setShowBroadcast(false)
     await load()
