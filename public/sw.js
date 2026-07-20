@@ -1,6 +1,6 @@
 // Tawreedat HRIS — Service Worker
 // ⚠️ Bump CACHE_VERSION on every deployment
-const CACHE_VERSION = "v4"
+const CACHE_VERSION = "v5"
 const CACHE_NAME = `tawreedat-${CACHE_VERSION}`
 
 const STATIC_ASSETS = [
@@ -73,7 +73,9 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then(
         (cached) => cached || fetch(request).then((res) => {
           if (res.status === 200) {
-            caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()))
+            // Clone BEFORE returning — the body can only be read once
+            const copy = res.clone()
+            caches.open(CACHE_NAME).then((c) => c.put(request, copy))
           }
           return res
         })
@@ -86,7 +88,9 @@ self.addEventListener("fetch", (event) => {
     fetch(request)
       .then((res) => {
         if (res.status === 200) {
-          caches.open(CACHE_NAME).then((c) => c.put(request, res.clone()))
+          // Clone BEFORE returning — the body can only be read once
+          const copy = res.clone()
+          caches.open(CACHE_NAME).then((c) => c.put(request, copy))
         }
         return res
       })
@@ -94,7 +98,9 @@ self.addEventListener("fetch", (event) => {
         return caches.match(request).then((cached) => {
           if (cached) return cached
           if (request.mode === "navigate") {
-            return caches.match("/m") || caches.match("/login")
+            return caches.match("/m").then((m) =>
+              m || caches.match("/login").then((l) => l || new Response("Offline", { status: 503 }))
+            )
           }
           return new Response("Offline", { status: 503 })
         })
