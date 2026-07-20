@@ -145,8 +145,77 @@ export function AnnouncementsTab() {
       return
     }
 
+    // On CREATE with immediate publish → in-app notification + push to targets
+    // (scheduled future announcements are skipped — no cron yet)
+    if (!editingId && new Date(payload.publish_at) <= new Date()) {
+      await notifyAnnouncementTargets(payload)
+    }
+
     setShowModal(false)
     await loadData()
+  }
+
+  // ── Notify: insert bell notifications + send push to targeted users ────────
+  async function notifyAnnouncementTargets(payload: {
+    title: string
+    body: string
+    target_role: UserRole | null
+    target_department_id: string | null
+    target_site_id: string | null
+  }) {
+    try {
+      // 1) Resolve target profiles
+      let profQuery = supabase.from("profiles").select("id, employee_id, role")
+      if (payload.target_role) profQuery = profQuery.eq("role", payload.target_role)
+      const { data: profiles } = await profQuery
+      if (!profiles?.length) return
+
+      let targetIds = profiles.map(p => p.id)
+
+      // Narrow by department / site via the employees table
+      if (payload.target_department_id || payload.target_site_id) {
+        let empQuery = supabase.from("employees").select("id")
+        if (payload.target_department_id) empQuery = empQuery.eq("department_id", payload.target_department_id)
+        if (payload.target_site_id)       empQuery = empQuery.eq("site_id", payload.target_site_id)
+        const { data: emps } = await empQuery
+        const empIds = new Set((emps ?? []).map(e => e.id))
+        targetIds = profiles
+          .filter(p => p.employee_id && empIds.has(p.employee_id))
+          .map(p => p.id)
+      }
+
+      if (targetIds.length === 0) return
+
+      // 2) In-app bell notifications
+      await supabase.from("notifications").insert(
+        targetIds.map(user_id => ({
+          user_id,
+          notification_type: "announcement" as const,
+          title:   payload.title,
+          message: payload.body.slice(0, 200),
+          is_read: false,
+        }))
+      )
+
+      // 3) Push to devices (best-effort)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
+      await fetch("/api/send-push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          user_ids: targetIds,
+          title:    `📢 ${payload.title}`,
+          body:     payload.body.slice(0, 120),
+          url:      "/m/notifications",
+        }),
+      })
+    } catch {
+      // Notifications are best-effort — never block publishing
+    }
   }
 
   async function remove(id: string, title: string) {
