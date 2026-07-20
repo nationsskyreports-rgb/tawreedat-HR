@@ -280,6 +280,39 @@ export async function loginWithBiometric(): Promise<
 }
 
 // ---------------------------------------------------------------------------
+// SIGN OUT (biometric-aware)
+// A server signOut — even with scope "local" — REVOKES the refresh token on
+// Supabase, which would kill biometric re-login. So when biometric is enabled,
+// logout is a LOCAL LOCK: snapshot the freshest tokens, then clear the client
+// session without calling the server (same model as banking apps).
+// Real revocation happens when the user disables biometric or has none.
+// ---------------------------------------------------------------------------
+export async function signOutKeepingBiometric(): Promise<void> {
+  if (hasBiometricSession()) {
+    // Capture the freshest tokens behind the gate BEFORE clearing anything
+    await syncBiometricSession()
+
+    // Clear client-side session only (cookies + storage), no server call
+    try {
+      document.cookie.split(";").forEach((c) => {
+        const name = c.split("=")[0]?.trim()
+        if (name && name.startsWith("sb-")) {
+          document.cookie = `${name}=; Max-Age=0; path=/`
+        }
+      })
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith("sb-")) localStorage.removeItem(k)
+      })
+    } catch {
+      // best-effort
+    }
+  } else {
+    // No biometric on this device → normal full sign-out
+    await supabase.auth.signOut()
+  }
+}
+
+// ---------------------------------------------------------------------------
 // DISABLE
 // ---------------------------------------------------------------------------
 export function disableBiometric(): void {
