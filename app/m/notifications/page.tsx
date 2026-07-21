@@ -54,7 +54,27 @@ export default function NotificationsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+
+    // Live updates so new notifications appear immediately
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      channel = supabase
+        .channel(`m-notif:${user.id}`)
+        .on("postgres_changes", {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        }, (payload) => {
+          setNotifications(prev => [payload.new as Notification, ...prev])
+        })
+        .subscribe()
+    })
+    return () => { if (channel) supabase.removeChannel(channel) }
+  }, [])
 
   async function markRead(id: string) {
     setActionId(id)
