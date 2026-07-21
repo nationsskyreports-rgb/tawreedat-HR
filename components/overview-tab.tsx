@@ -9,32 +9,12 @@ import {
   CalendarCheck, Timer, UserPlus, CheckCircle2, XCircle, Activity,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import type { EmployeeCategory, EmployeeStatus, AttendanceStatus } from "@/lib/types"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-type KPIs = {
-  totalEmployees: number
-  activeEmployees: number
-  todayPresent: number
-  todayAbsent: number
-  todayLate: number
-  onLeave: number
-  openJobs: number
-  pendingLeaves: number
-  totalSites: number
-}
-
-type CategoryCount = { category: EmployeeCategory; count: number }
-type SiteCount     = { site_name: string; count: number }
-type RecentAttendance = {
-  id: string
-  employee_name: string
-  status: AttendanceStatus
-  checkin_at: string
-  site_name: string | null
-}
+import type { EmployeeCategory, AttendanceStatus } from "@/lib/types"
+import { CATEGORY_CONFIG, ATTENDANCE_COLORS as attendanceColors, timeAgo } from "@/lib/constants"
+import {
+  fetchOverviewKPIs, fetchCategoryBreakdown, fetchSiteBreakdown, fetchRecentAttendance,
+  type KPIs, type CategoryCount, type SiteCount, type RecentAttendance,
+} from "@/lib/queries/overview"
 
 type ActivityType = "checkin" | "leave_request" | "leave_update" | "overtime" | "new_employee"
 type ActivityItem = {
@@ -48,34 +28,13 @@ type ActivityItem = {
   icon:          typeof Activity
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Config
-// ─────────────────────────────────────────────────────────────────────────────
+// Overview uses plural labels + flat colours (no bg-*) vs the shared config
 const categoryConfig: Record<EmployeeCategory, { label: string; color: string; icon: typeof Truck }> = {
-  driver:     { label: "Drivers",     color: "text-chart-1",    icon: Truck },
-  warehouse:  { label: "Warehouse",   color: "text-chart-2",    icon: Package },
-  field_ops:  { label: "Field Ops",   color: "text-chart-3",    icon: MapPin },
-  office:     { label: "Office",      color: "text-primary",    icon: Monitor },
-  supervisor: { label: "Supervisors", color: "text-destructive", icon: Shield },
-}
-
-const attendanceColors: Record<AttendanceStatus, string> = {
-  present:  "bg-chart-3/15 text-chart-3",
-  late:     "bg-primary/15 text-primary",
-  absent:   "bg-destructive/15 text-destructive",
-  on_leave: "bg-chart-2/15 text-chart-2",
-  holiday:  "bg-secondary text-secondary-foreground",
-  half_day: "bg-chart-4/15 text-chart-4",
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1)  return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24)  return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  driver:     { ...CATEGORY_CONFIG.driver,     label: "Drivers",     color: "text-chart-1"     },
+  warehouse:  { ...CATEGORY_CONFIG.warehouse,                        color: "text-chart-2"     },
+  field_ops:  { ...CATEGORY_CONFIG.field_ops,                        color: "text-chart-3"     },
+  office:     { ...CATEGORY_CONFIG.office,                           color: "text-primary"     },
+  supervisor: { ...CATEGORY_CONFIG.supervisor, label: "Supervisors", color: "text-destructive" },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,75 +54,16 @@ export function OverviewTab() {
     todayStart.setHours(0, 0, 0, 0)
     const todayStartISO = todayStart.toISOString()
 
-    const [empRes, attendanceRes, jobsRes, leavesRes, sitesRes, recentRes] = await Promise.all([
-      supabase.from("employees").select("id, category, status"),
-      supabase.from("attendance_logs").select("status, employee_id").gte("checkin_at", todayStartISO),
-      supabase.from("job_postings").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("sites").select("id, name").eq("is_active", true),
-      supabase.from("attendance_logs")
-        .select("id, status, checkin_at, employee_id, site_id, employees(full_name), sites(name)")
-        .order("checkin_at", { ascending: false })
-        .limit(8),
+    const [kpis, cats, sites, recent] = await Promise.all([
+      fetchOverviewKPIs(todayStartISO),
+      fetchCategoryBreakdown(),
+      fetchSiteBreakdown(),
+      fetchRecentAttendance(),
     ])
-
-    const employees = empRes.data ?? []
-    const attendance = attendanceRes.data ?? []
-    const sites = sitesRes.data ?? []
-
-    const activeEmployees = employees.filter(e => e.status === "active").length
-    const onLeave         = employees.filter(e => e.status === "on_leave").length
-    const todayPresent    = attendance.filter(a => a.status === "present").length
-    const todayLate       = attendance.filter(a => a.status === "late").length
-    const todayAbsent     = activeEmployees - new Set(attendance.map(a => a.employee_id)).size
-
-    setKpis({
-      totalEmployees: employees.length,
-      activeEmployees,
-      todayPresent,
-      todayAbsent: Math.max(0, todayAbsent),
-      todayLate,
-      onLeave,
-      openJobs:      jobsRes.count ?? 0,
-      pendingLeaves: leavesRes.count ?? 0,
-      totalSites:    sites.length,
-    })
-
-    const catMap = new Map<EmployeeCategory, number>()
-    employees.forEach(e => {
-      const c = e.category as EmployeeCategory
-      catMap.set(c, (catMap.get(c) ?? 0) + 1)
-    })
-    setByCategory(
-      Array.from(catMap.entries())
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count)
-    )
-
-    const { data: empWithSites } = await supabase
-      .from("employees").select("site_id, sites(name)").not("site_id", "is", null)
-
-    const siteMap = new Map<string, number>()
-    ;(empWithSites ?? []).forEach((e: any) => {
-      const name = e.sites?.name ?? "Unassigned"
-      siteMap.set(name, (siteMap.get(name) ?? 0) + 1)
-    })
-    setBySite(
-      Array.from(siteMap.entries())
-        .map(([site_name, count]) => ({ site_name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 6)
-    )
-
-    setRecentAttendance(
-      (recentRes.data ?? []).map((r: any) => ({
-        id:            r.id,
-        employee_name: r.employees?.full_name ?? "Unknown",
-        status:        r.status,
-        checkin_at:    r.checkin_at,
-        site_name:     r.sites?.name ?? null,
-      }))
-    )
+    setKpis(kpis)
+    setByCategory(cats)
+    setBySite(sites)
+    setRecentAttendance(recent)
 
     // ── Activity Feed ─────────────────────────────────────────────────────
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
