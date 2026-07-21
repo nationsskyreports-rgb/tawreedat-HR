@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Analytics } from "@vercel/analytics/next"
+import { ToastContainer } from "@/components/toast"
 import "./globals.css"
 
 const jakarta = Plus_Jakarta_Sans({
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           {children}
         </ThemeProvider>
+        <ToastContainer />
         <Analytics />
         <script dangerouslySetInnerHTML={{
           __html: `
