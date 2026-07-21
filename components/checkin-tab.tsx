@@ -8,6 +8,7 @@ import {
   Clock, LogOut, AlertTriangle, User
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { fetchCheckinData, insertCheckin, updateCheckout } from "@/lib/queries/attendance"
 import type {
   Site, Employee, AttendanceLog, AttendanceStatus, CheckinResultType
 } from "@/lib/types"
@@ -51,17 +52,10 @@ export function CheckinTab() {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
 
-    const [empRes, siteRes, logsRes] = await Promise.all([
-      supabase.from("employees").select("*").eq("status", "active").order("full_name"),
-      supabase.from("sites").select("*").eq("is_active", true).order("name"),
-      supabase.from("attendance_logs")
-        .select("*")
-        .gte("checkin_at", todayStart.toISOString())
-        .order("checkin_at", { ascending: false })
-    ])
-    setEmployees((empRes.data ?? []) as Employee[])
-    setSites((siteRes.data ?? []) as Site[])
-    setTodayLogs((logsRes.data ?? []) as AttendanceLog[])
+    const data = await fetchCheckinData(todayStart.toISOString())
+    setEmployees(data.employees)
+    setSites(data.sites)
+    setTodayLogs(data.todayLogs)
     setLoading(false)
   }
 
@@ -131,12 +125,12 @@ export function CheckinTab() {
       status = "absent"
     }
 
-    const { error } = await supabase.from("attendance_logs").insert({
-      employee_id: selectedEmployeeId,
-      site_id: selectedSiteId,
-      checkin_at: new Date().toISOString(),
-      lat: position.lat,
-      lng: position.lng,
+    const { error } = await insertCheckin({
+      employee_id:    selectedEmployeeId,
+      site_id:        selectedSiteId,
+      checkin_at:     new Date().toISOString(),
+      lat:            position.lat,
+      lng:            position.lng,
       status,
       checkin_result: checkinResult,
       checkin_method: "mobile",
@@ -170,9 +164,7 @@ export function CheckinTab() {
   async function handleCheckOut(logId: string) {
     if (!confirm("Confirm check-out?")) return
 
-    const { error } = await supabase.from("attendance_logs")
-      .update({ checkout_at: new Date().toISOString() })
-      .eq("id", logId)
+    const { error } = await updateCheckout(logId)
 
     if (error) return alert(error.message)
     await loadData()
