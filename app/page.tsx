@@ -20,6 +20,7 @@ import { RequestsTab } from "@/components/requests-tab"
 import { Bell, X, Sun, Moon, Shield, Briefcase, User } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import { toast } from "@/components/toast"
 import type { Profile, UserRole } from "@/lib/types"
 import { CompetencesTab } from "@/components/competences-tab"
 import { MyTeamTab }        from "@/components/my-team-tab"
@@ -45,7 +46,13 @@ export default function Page() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [alerts, setAlerts] = useState<{ type: string; count: number; urgency: "high" | "low" }[]>([])
+  const [notifs, setNotifs] = useState<Array<{
+    id: string
+    title: string
+    message: string | null
+    is_read: boolean
+    created_at: string
+  }>>([])
   const { theme, setTheme } = useTheme()
   const notifRef = useRef<HTMLDivElement>(null)
 
@@ -74,18 +81,43 @@ export default function Page() {
 
     loadUser()
 
-    // Real alert counts from the database (no fake numbers)
-    async function loadAlerts() {
-      const [leaves, punches] = await Promise.all([
-        supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("missing_punch_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      ])
-      const items: { type: string; count: number; urgency: "high" | "low" }[] = []
-      if ((leaves.count ?? 0) > 0)  items.push({ type: "Pending Leave Requests",  count: leaves.count ?? 0,  urgency: "low" })
-      if ((punches.count ?? 0) > 0) items.push({ type: "Pending Punch Requests", count: punches.count ?? 0, urgency: "high" })
-      setAlerts(items)
+    // ── Real bell notifications for the current user ─────────────────────
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    async function loadNotifs() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from("notifications")
+        .select("id, title, message, is_read, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+      setNotifs((data ?? []) as typeof notifs)
+
+      // Live updates via Supabase Realtime
+      channel = supabase
+        .channel(`notif:${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const n = payload.new as typeof notifs[number]
+            setNotifs(prev => [n, ...prev].slice(0, 20))
+            // Fire a toast so HR sees new arrivals even without opening the bell
+            toast(n.title, "info")
+          }
+        )
+        .subscribe()
     }
-    loadAlerts()
+    loadNotifs()
 
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
@@ -93,9 +125,13 @@ export default function Page() {
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [])
 
+  const unreadCount = notifs.filter(n => !n.is_read).length
   const displayName = profile?.full_name ?? userEmail ?? "..."
   const initials = getInitials(profile?.full_name, userEmail ?? "?")
   const role = profile?.role ?? "employee"
@@ -147,10 +183,10 @@ export default function Page() {
                 aria-label="Notifications"
               >
                 <Bell className="size-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-                {alerts.length > 0 && (
+                {unreadCount > 0 && (
                   <div className="absolute -top-1 -right-1 size-3 bg-destructive rounded-full flex items-center justify-center">
                     <span className="text-[8px] text-white font-bold">
-                      {alerts.reduce((s, a) => s + a.count, 0)}
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   </div>
                 )}
@@ -158,31 +194,59 @@ export default function Page() {
               {showNotifications && (
                 <div className="absolute right-0 top-8 w-72 bg-card border border-border rounded-xl shadow-2xl z-50">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <span className="text-xs font-medium text-foreground">Active Alerts</span>
-                    <button onClick={() => setShowNotifications(false)} aria-label="Close">
-                      <X className="size-3.5 text-muted-foreground hover:text-foreground" />
-                    </button>
-                  </div>
-                  <div className="flex flex-col py-2">
-                    {alerts.length === 0 && (
-                      <p className="px-4 py-3 text-xs text-muted-foreground">No pending alerts 🎉</p>
-                    )}
-                    {alerts.map((alert) => (
-                      <div
-                        key={alert.type}
-                        className="flex items-center justify-between px-4 py-2.5 hover:bg-secondary/50 transition-colors"
-                      >
-                        <span className="text-xs text-muted-foreground">{alert.type}</span>
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs ${
-                            alert.urgency === "high"
-                              ? "bg-destructive/15 text-destructive"
-                              : "bg-secondary text-secondary-foreground"
-                          }`}
+                    <span className="text-xs font-medium text-foreground">
+                      Notifications {unreadCount > 0 && <span className="text-muted-foreground font-normal">· {unreadCount} new</span>}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={async () => {
+                            const { data: { user } } = await supabase.auth.getUser()
+                            if (!user) return
+                            await supabase.from("notifications")
+                              .update({ is_read: true, read_at: new Date().toISOString() })
+                              .eq("user_id", user.id).eq("is_read", false)
+                            setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
+                          }}
+                          className="text-[10px] text-primary hover:underline"
                         >
-                          {alert.count}
-                        </Badge>
+                          Mark all read
+                        </button>
+                      )}
+                      <button onClick={() => setShowNotifications(false)} aria-label="Close">
+                        <X className="size-3.5 text-muted-foreground hover:text-foreground" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col py-1 max-h-96 overflow-y-auto">
+                    {notifs.length === 0 && (
+                      <p className="px-4 py-6 text-xs text-muted-foreground text-center">
+                        No notifications yet
+                      </p>
+                    )}
+                    {notifs.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`px-4 py-2.5 border-b border-border/40 last:border-0 hover:bg-secondary/50 transition-colors ${
+                          !n.is_read ? "bg-primary/5" : ""
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-xs ${!n.is_read ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                            {n.title}
+                          </p>
+                          {!n.is_read && <div className="size-1.5 bg-primary rounded-full mt-1 shrink-0" />}
+                        </div>
+                        {n.message && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                            {n.message}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-muted-foreground/70 mt-1">
+                          {new Date(n.created_at).toLocaleString("en-GB", {
+                            day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                          })}
+                        </p>
                       </div>
                     ))}
                   </div>
