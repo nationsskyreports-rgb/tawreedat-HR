@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { LogOut, X } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { ToastContainer } from "@/components/toast"
 import { syncBiometricSession, signOutKeepingBiometric } from "@/lib/webauthn"
 
 const AWAY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
@@ -109,7 +108,6 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
-      <ToastContainer />
 
       {showLogoutPrompt && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-6">
