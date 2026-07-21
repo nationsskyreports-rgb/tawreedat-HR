@@ -8,6 +8,7 @@ import {
   ClipboardList, Timer, FileSearch,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { notifyHR } from "@/lib/notifications"
 import type {
   Employee, AttendanceLog, AttendanceStatus,
   OvertimeRecord, MissingPunchRequest,
@@ -166,36 +167,7 @@ export default function AttendancePage() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
   }
 
-  // ── Notify HR users when employee submits a request ────────────────────────
-  async function notifyHR(title: string, message: string) {
-    try {
-      // Get all HR + admin profile IDs
-      const { data: hrProfiles } = await supabase
-        .from("profiles")
-        .select("id")
-        .in("role", ["admin", "hr"])
-
-      if (!hrProfiles?.length) return
-
-      // Insert bell notifications so HR sees them in the notifications tab
-      await supabase.from("notifications").insert(
-        hrProfiles.map(p => ({
-          user_id:           p.id,
-          notification_type: "general" as const,
-          title,
-          message,
-          is_read: false,
-        }))
-      )
-
-      // Send push to their devices too (best-effort, no auth token needed here
-      // since this runs in the employee's session which is not HR — skip push)
-    } catch {
-      // best-effort, never block the submit flow
-    }
-  }
-
-    async function submitPunch() {
+  async function submitPunch() {
     if (!employee) return
     setPunchErr(null)
     if (!punchForm.date || !punchForm.expected_time || !punchForm.reason.trim()) {
@@ -223,7 +195,8 @@ export default function AttendancePage() {
       // Notify HR/admin that a new missing punch request needs review
       notifyHR(
         "Missing Punch Request 🕒",
-        `${employee.full_name} submitted a missing punch for ${punchForm.date}`
+        `${employee.full_name} submitted a missing punch for ${punchForm.date}`,
+        "/"
       )
     }
   }
@@ -261,7 +234,8 @@ export default function AttendancePage() {
       // Notify HR/admin that a new overtime request needs review
       notifyHR(
         "Overtime Request ⏱️",
-        `${employee.full_name} submitted an OT request for ${otForm.date} (${otForm.hours}h)`
+        `${employee.full_name} submitted an OT request for ${otForm.date} (${otForm.hours}h)`,
+        "/"
       )
     }
   }
