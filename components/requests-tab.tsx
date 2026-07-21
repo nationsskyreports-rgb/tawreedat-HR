@@ -13,6 +13,7 @@ import {
   type OTRow, type PunchRow, type ManualOTPayload,
 } from "@/lib/queries/attendance"
 import { toast } from "@/components/toast"
+import { notifyEmployeeByEmployeeId } from "@/lib/notifications"
 import type { Employee, OvertimeRecord, MissingPunchRequest } from "@/lib/types"
 
 
@@ -22,47 +23,6 @@ const statusColors: Record<string, string> = {
   rejected: "bg-destructive/15 text-destructive",
 }
 
-// ── Helper: insert bell notification + send push to an employee ─────────────
-async function notifyEmployee(
-  employeeId: string,
-  title: string,
-  body: string,
-  url = "/m/attendance"
-) {
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("employee_id", employeeId)
-      .single()
-
-    if (!profile?.id) return
-
-    // 1) Insert into notifications table so it appears in /m/notifications
-    await supabase.from("notifications").insert({
-      user_id:           profile.id,
-      notification_type: "general",
-      title,
-      message: body,
-      is_read: false,
-    })
-
-    // 2) Send push to device (best-effort)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) return
-
-    await fetch("/api/send-push", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ user_id: profile.id, title, body, url }),
-    })
-  } catch {
-    // Push is best-effort — don't block UI
-  }
-}
 
 export function RequestsTab() {
   const [activeTab,     setActiveTab]     = useState<"overtime" | "missing_punch">("overtime")
@@ -109,7 +69,7 @@ export function RequestsTab() {
       toast("Failed to approve request", "error")
     } else {
       toast(`Overtime approved for ${employeeName}`, "success")
-      notifyEmployee(
+      notifyEmployeeByEmployeeId(
         employeeId,
         "Overtime Approved ✅",
         "Your overtime request has been approved",
@@ -131,7 +91,7 @@ export function RequestsTab() {
       toast("Failed to reject request", "error")
     } else {
       toast(`Overtime rejected for ${employeeName}`, "warning")
-      notifyEmployee(
+      notifyEmployeeByEmployeeId(
         employeeId,
         "Overtime Request Update",
         "Your overtime request was not approved",
@@ -155,7 +115,7 @@ export function RequestsTab() {
       toast("Failed to approve — " + error.message, "error")
     } else {
       toast(`Missing punch approved for ${employeeName}`, "success")
-      notifyEmployee(
+      notifyEmployeeByEmployeeId(
         employeeId,
         "Missing Punch Approved ✅",
         "Your missing punch request has been approved and attendance updated",
@@ -177,7 +137,7 @@ export function RequestsTab() {
       toast("Failed to reject request", "error")
     } else {
       toast(`Missing punch rejected for ${employeeName}`, "warning")
-      notifyEmployee(
+      notifyEmployeeByEmployeeId(
         employeeId,
         "Missing Punch Request Update",
         "Your missing punch request was not approved",
@@ -220,7 +180,7 @@ export function RequestsTab() {
     } else {
       const emp = employees.find(e => e.id === manualForm.employee_id)
       toast(`Manual OT added for ${emp?.full_name ?? "employee"}`, "success")
-      notifyEmployee(
+      notifyEmployeeByEmployeeId(
         manualForm.employee_id,
         "Overtime Recorded ✅",
         `${hrs}h overtime has been recorded by HR`,
