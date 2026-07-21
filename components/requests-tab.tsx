@@ -22,7 +22,7 @@ const statusColors: Record<string, string> = {
   rejected: "bg-destructive/15 text-destructive",
 }
 
-// ── Helper: send push to an employee's devices ────────────────────────────────
+// ── Helper: insert bell notification + send push to an employee ─────────────
 async function notifyEmployee(
   employeeId: string,
   title: string,
@@ -38,7 +38,16 @@ async function notifyEmployee(
 
     if (!profile?.id) return
 
-    // The API now requires the caller's Supabase JWT (HR / admin / manager only)
+    // 1) Insert into notifications table so it appears in /m/notifications
+    await supabase.from("notifications").insert({
+      user_id:           profile.id,
+      notification_type: "general",
+      title,
+      message: body,
+      is_read: false,
+    })
+
+    // 2) Send push to device (best-effort)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.access_token) return
 
@@ -90,8 +99,11 @@ export function RequestsTab() {
 
   // ── Overtime actions ──────────────────────────────────────────────────────
   async function handleApproveOT(id: string, employeeId: string, employeeName: string) {
+    const { data: { user: approver } } = await supabase.auth.getUser()
+    const approverId = approver?.id ?? currentUserId
+    if (!approverId) { toast("Not authenticated", "error"); return }
     setActionLoading(id)
-    const { error } = await approveOT(id, currentUserId!)
+    const { error } = await approveOT(id, approverId)
 
     if (error) {
       toast("Failed to approve request", "error")
@@ -109,8 +121,11 @@ export function RequestsTab() {
   }
 
   async function handleRejectOT(id: string, employeeId: string, employeeName: string) {
+    const { data: { user: approver } } = await supabase.auth.getUser()
+    const approverId = approver?.id ?? currentUserId
+    if (!approverId) { toast("Not authenticated", "error"); return }
     setActionLoading(id)
-    const { error } = await rejectOT(id, currentUserId!)
+    const { error } = await rejectOT(id, approverId)
 
     if (error) {
       toast("Failed to reject request", "error")
@@ -129,9 +144,12 @@ export function RequestsTab() {
 
   // ── Missing Punch actions ─────────────────────────────────────────────────
   async function handleApprovePunch(id: string, employeeId: string, employeeName: string) {
-    if (!currentUserId) return
+    // Get approverId fresh at click-time in case state is stale
+    const { data: { user: approver } } = await supabase.auth.getUser()
+    const approverId = approver?.id ?? currentUserId
+    if (!approverId) { toast("Not authenticated", "error"); return }
     setActionLoading(id)
-    const { error } = await approvePunch(id, currentUserId!)
+    const { error } = await approvePunch(id, approverId)
 
     if (error) {
       toast("Failed to approve — " + error.message, "error")
@@ -149,8 +167,11 @@ export function RequestsTab() {
   }
 
   async function handleRejectPunch(id: string, employeeId: string, employeeName: string) {
+    const { data: { user: approver } } = await supabase.auth.getUser()
+    const approverId = approver?.id ?? currentUserId
+    if (!approverId) { toast("Not authenticated", "error"); return }
     setActionLoading(id)
-    const { error } = await rejectPunch(id, currentUserId!)
+    const { error } = await rejectPunch(id, approverId)
 
     if (error) {
       toast("Failed to reject request", "error")
