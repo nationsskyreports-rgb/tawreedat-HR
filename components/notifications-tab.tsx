@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { notifyUsers } from "@/lib/notifications"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -133,29 +134,13 @@ export function NotificationsTab() {
       is_read:           false,
     }))
 
-    const { error } = await supabase.from("notifications").insert(rows)
-    if (error) { setBcSending(false); setBcErr(error.message); return }
-
-    // Push to devices too (best-effort)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.access_token) {
-        await fetch("/api/send-push", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            user_ids: profiles.map(p => p.id),
-            title:    bcTitle.trim(),
-            body:     (bcMessage.trim() || "").slice(0, 120),
-            url:      "/m/notifications",
-          }),
-        })
-      }
-    } catch { /* best-effort */ }
-
+    // Central helper: inserts bell rows + sends push in one call
+    await notifyUsers(
+      profiles.map(p => p.id),
+      bcTitle.trim(),
+      bcMessage.trim() || bcTitle.trim(),
+      "/m/notifications"
+    )
     setBcSending(false)
 
     setBcTitle(""); setBcMessage(""); setShowBroadcast(false)
