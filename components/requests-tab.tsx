@@ -7,11 +7,14 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import {
+  fetchRequestsData, approveOT, rejectOT, insertManualOT,
+  approvePunch, rejectPunch,
+  type OTRow, type PunchRow, type ManualOTPayload,
+} from "@/lib/queries/attendance"
 import { toast } from "@/components/toast"
 import type { Employee, OvertimeRecord, MissingPunchRequest } from "@/lib/types"
 
-type OTRow    = OvertimeRecord      & { employee_name?: string; employee_no?: string; employee_id: string }
-type PunchRow = MissingPunchRequest & { employee_name?: string; employee_no?: string; employee_id: string }
 
 const statusColors: Record<string, string> = {
   pending:  "bg-primary/15 text-primary",
@@ -75,49 +78,20 @@ export function RequestsTab() {
 
   async function loadData() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    setCurrentUserId(user?.id ?? null)
-
-    const [otRes, punchRes, empRes] = await Promise.all([
-      supabase
-        .from("overtime_records")
-        .select("*, employees(full_name, employee_no)")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("missing_punch_requests")
-        .select("*, employees(full_name, employee_no)")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("employees")
-        .select("id, full_name, employee_no")
-        .eq("status", "active")
-        .order("full_name"),
-    ])
-
-    setOtList((otRes.data ?? []).map((r: any) => ({
-      ...r,
-      employee_name: r.employees?.full_name,
-      employee_no:   r.employees?.employee_no,
-    })))
-    setPunchList((punchRes.data ?? []).map((r: any) => ({
-      ...r,
-      employee_name: r.employees?.full_name,
-      employee_no:   r.employees?.employee_no,
-    })))
-    setEmployees((empRes.data ?? []) as any)
+    const data = await fetchRequestsData()
+    setOtList(data.otList)
+    setPunchList(data.punchList)
+    setEmployees(data.employees as any)
+    setCurrentUserId(data.currentUserId)
     setLoading(false)
   }
 
   useEffect(() => { loadData() }, [])
 
   // ── Overtime actions ──────────────────────────────────────────────────────
-  async function approveOT(id: string, employeeId: string, employeeName: string) {
+  async function handleApproveOT(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    const { error } = await supabase.from("overtime_records").update({
-      status:      "approved",
-      approved_by: currentUserId,
-      approved_at: new Date().toISOString(),
-    }).eq("id", id)
+    const { error } = await approveOT(id, currentUserId!)
 
     if (error) {
       toast("Failed to approve request", "error")
@@ -134,13 +108,9 @@ export function RequestsTab() {
     setActionLoading(null)
   }
 
-  async function rejectOT(id: string, employeeId: string, employeeName: string) {
+  async function handleRejectOT(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    const { error } = await supabase.from("overtime_records").update({
-      status:      "rejected",
-      approved_by: currentUserId,
-      approved_at: new Date().toISOString(),
-    }).eq("id", id)
+    const { error } = await rejectOT(id, currentUserId!)
 
     if (error) {
       toast("Failed to reject request", "error")
@@ -158,13 +128,10 @@ export function RequestsTab() {
   }
 
   // ── Missing Punch actions ─────────────────────────────────────────────────
-  async function approvePunch(id: string, employeeId: string, employeeName: string) {
+  async function handleApprovePunch(id: string, employeeId: string, employeeName: string) {
     if (!currentUserId) return
     setActionLoading(id)
-    const { error } = await supabase.rpc("approve_missing_punch", {
-      request_id:  id,
-      approver_id: currentUserId,
-    })
+    const { error } = await approvePunch(id, currentUserId!)
 
     if (error) {
       toast("Failed to approve — " + error.message, "error")
@@ -181,13 +148,9 @@ export function RequestsTab() {
     setActionLoading(null)
   }
 
-  async function rejectPunch(id: string, employeeId: string, employeeName: string) {
+  async function handleRejectPunch(id: string, employeeId: string, employeeName: string) {
     setActionLoading(id)
-    const { error } = await supabase.from("missing_punch_requests").update({
-      status:      "rejected",
-      approved_by: currentUserId,
-      approved_at: new Date().toISOString(),
-    }).eq("id", id)
+    const { error } = await rejectPunch(id, currentUserId!)
 
     if (error) {
       toast("Failed to reject request", "error")
@@ -217,7 +180,7 @@ export function RequestsTab() {
       return
     }
     setManualSaving(true)
-    const { error } = await supabase.from("overtime_records").insert({
+    const { error } = await insertManualOT({
       employee_id: manualForm.employee_id,
       date:        manualForm.date,
       hours:       hrs,
@@ -227,7 +190,7 @@ export function RequestsTab() {
       status:      "approved",
       approved_by: currentUserId,
       approved_at: new Date().toISOString(),
-    })
+    } as ManualOTPayload)
     setManualSaving(false)
 
     if (error) {
@@ -463,7 +426,7 @@ export function RequestsTab() {
                       {ot.status === "pending" && (
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => approveOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
+                            onClick={() => handleApproveOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
                             disabled={actionLoading === ot.id}
                             className="px-2.5 py-1 bg-chart-3/15 text-chart-3 rounded-lg text-[11px] font-medium hover:bg-chart-3/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -473,7 +436,7 @@ export function RequestsTab() {
                             Approve
                           </button>
                           <button
-                            onClick={() => rejectOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
+                            onClick={() => handleRejectOT(ot.id, ot.employee_id, ot.employee_name ?? "")}
                             disabled={actionLoading === ot.id}
                             className="px-2.5 py-1 bg-destructive/15 text-destructive rounded-lg text-[11px] font-medium hover:bg-destructive/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -538,7 +501,7 @@ export function RequestsTab() {
                         <span className="capitalize font-medium text-foreground">
                           {p.punch_type.replace("_", " ")}
                         </span>
-                        <span className="font-mono">{p.expected_time.slice(0, 5)}</span>
+                        <span className="font-mono">{(p.expected_time ?? p.requested_time ?? "").slice(0, 5)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{p.reason}</p>
                     </div>
@@ -550,7 +513,7 @@ export function RequestsTab() {
                       {p.status === "pending" && (
                         <div className="flex gap-1.5">
                           <button
-                            onClick={() => approvePunch(p.id, p.employee_id, p.employee_name ?? "")}
+                            onClick={() => handleApprovePunch(p.id, p.employee_id, p.employee_name ?? "")}
                             disabled={actionLoading === p.id}
                             className="px-2.5 py-1 bg-chart-3/15 text-chart-3 rounded-lg text-[11px] font-medium hover:bg-chart-3/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
@@ -560,7 +523,7 @@ export function RequestsTab() {
                             Approve
                           </button>
                           <button
-                            onClick={() => rejectPunch(p.id, p.employee_id, p.employee_name ?? "")}
+                            onClick={() => handleRejectPunch(p.id, p.employee_id, p.employee_name ?? "")}
                             disabled={actionLoading === p.id}
                             className="px-2.5 py-1 bg-destructive/15 text-destructive rounded-lg text-[11px] font-medium hover:bg-destructive/25 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
