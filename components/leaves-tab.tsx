@@ -8,6 +8,10 @@ import {
   Clock, FileText, User, Filter
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import {
+  fetchLeavesData, createLeaveRequest, updateLeaveStatus,
+  type RequestWithRelations,
+} from "@/lib/queries/leaves"
 import type {
   Employee, LeaveType, LeaveBalance, LeaveRequest,
   LeaveRequestStatus, UserRole, Profile
@@ -20,12 +24,6 @@ const statusConfig: Record<LeaveRequestStatus, { label: string; color: string; i
   cancelled: { label: "Cancelled", color: "bg-secondary text-secondary-foreground", icon: X },
 }
 
-type RequestWithRelations = LeaveRequest & {
-  employee_name?: string
-  employee_no?: string
-  leave_type_name?: string
-  leave_type_color?: string
-}
 
 export function LeavesTab() {
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -55,33 +53,12 @@ export function LeavesTab() {
 
   async function loadData() {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const [empRes, typesRes, balRes, reqRes, profRes] = await Promise.all([
-      supabase.from("employees").select("*").eq("status", "active").order("full_name"),
-      supabase.from("leave_types").select("*").eq("is_active", true).order("name"),
-      supabase.from("leave_balances").select("*").eq("year", new Date().getFullYear()),
-      supabase.from("leave_requests")
-        .select("*, employees(full_name, employee_no), leave_types(name, color)")
-        .order("created_at", { ascending: false }),
-      user ? supabase.from("profiles").select("*").eq("id", user.id).single() : Promise.resolve({ data: null }),
-    ])
-
-    setEmployees((empRes.data ?? []) as Employee[])
-    setLeaveTypes((typesRes.data ?? []) as LeaveType[])
-    setBalances((balRes.data ?? []) as LeaveBalance[])
-    setCurrentUserProfile(profRes.data as Profile | null)
-
-    // Flatten the joined data
-    const flatRequests: RequestWithRelations[] = (reqRes.data ?? []).map((r: any) => ({
-      ...r,
-      employee_name: r.employees?.full_name,
-      employee_no: r.employees?.employee_no,
-      leave_type_name: r.leave_types?.name,
-      leave_type_color: r.leave_types?.color,
-    }))
-    setRequests(flatRequests)
-
+    const data = await fetchLeavesData()
+    setEmployees(data.employees)
+    setLeaveTypes(data.leaveTypes)
+    setBalances(data.balances)
+    setRequests(data.requests as any)
+    setCurrentUserProfile(data.currentUserProfile as Profile | null)
     setLoading(false)
   }
 
@@ -133,16 +110,16 @@ export function LeavesTab() {
 
     setSaving(true)
 
-    const { error } = await supabase.from("leave_requests").insert({
-      employee_id: form.employee_id,
-      leave_type_id: form.leave_type_id,
-      start_date: form.start_date,
-      end_date: form.end_date,
-      total_days: days,
-      reason: form.reason.trim() || null,
+    const { error } = await createLeaveRequest({
+      employee_id:          form.employee_id,
+      leave_type_id:        form.leave_type_id,
+      start_date:           form.start_date,
+      end_date:             form.end_date,
+      total_days:           days,
+      reason:               form.reason.trim() || null,
       contact_during_leave: form.contact_during_leave.trim() || null,
-      handover_notes: form.handover_notes.trim() || null,
-      status: "pending" as LeaveRequestStatus,
+      handover_notes:       form.handover_notes.trim() || null,
+      status:               "pending" as LeaveRequestStatus,
     })
 
     setSaving(false)
@@ -157,16 +134,7 @@ export function LeavesTab() {
   }
 
   async function updateRequestStatus(id: string, newStatus: LeaveRequestStatus, rejectionReason?: string) {
-    const updates: any = { status: newStatus }
-    if (newStatus === "approved") {
-      updates.approved_at = new Date().toISOString()
-    } else if (newStatus === "rejected") {
-      updates.rejection_reason = rejectionReason ?? "Rejected"
-    } else if (newStatus === "cancelled") {
-      updates.cancelled_at = new Date().toISOString()
-    }
-
-    const { error } = await supabase.from("leave_requests").update(updates).eq("id", id)
+    const { error } = await updateLeaveStatus(id, newStatus, { rejection_reason: rejectionReason })
     if (error) return alert(error.message)
     await loadData()
   }
