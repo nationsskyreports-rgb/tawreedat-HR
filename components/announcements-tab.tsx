@@ -8,6 +8,7 @@ import {
   AlertTriangle, Info, Bell, BellRing, Calendar, Filter
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { notifyUsers } from "@/lib/notifications"
 import type {
   Announcement, Department, Site, UserRole, Profile
 } from "@/lib/types"
@@ -185,34 +186,12 @@ export function AnnouncementsTab() {
       }
 
       if (targetIds.length === 0) return
-
-      // 2) In-app bell notifications
-      await supabase.from("notifications").insert(
-        targetIds.map(user_id => ({
-          user_id,
-          notification_type: "announcement" as const,
-          title:   payload.title,
-          message: payload.body.slice(0, 200),
-          is_read: false,
-        }))
+      await notifyUsers(
+        targetIds,
+        `📢 ${payload.title}`,
+        payload.body.slice(0, 200),
+        "/m/notifications"
       )
-
-      // 3) Push to devices (best-effort)
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) return
-      await fetch("/api/send-push", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          user_ids: targetIds,
-          title:    `📢 ${payload.title}`,
-          body:     payload.body.slice(0, 120),
-          url:      "/m/notifications",
-        }),
-      })
     } catch {
       // Notifications are best-effort — never block publishing
     }
