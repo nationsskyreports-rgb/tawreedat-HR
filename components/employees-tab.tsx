@@ -7,27 +7,16 @@ import {
   Users, Search, Plus, Truck, Package, MapPin, Monitor, Shield,
   X, Pencil, Trash2, Loader2, Filter
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import type {
   Employee, Department, Position, Site,
   EmployeeCategory, EmployeeStatus, ContractType, GenderType
 } from "@/lib/types"
+import { CATEGORY_CONFIG as categoryConfig, STATUS_CONFIG as statusConfig } from "@/lib/constants"
+import {
+  fetchEmployeesAndLookups, createEmployee, updateEmployee, deleteEmployee,
+  type EmployeePayload,
+} from "@/lib/queries/employees"
 
-const categoryConfig: Record<EmployeeCategory, { label: string; color: string; icon: typeof Truck }> = {
-  driver:     { label: "Driver",     color: "bg-chart-1/15 text-chart-1",       icon: Truck },
-  warehouse:  { label: "Warehouse",  color: "bg-chart-2/15 text-chart-2",       icon: Package },
-  field_ops:  { label: "Field Ops",  color: "bg-chart-3/15 text-chart-3",       icon: MapPin },
-  office:     { label: "Office",     color: "bg-primary/15 text-primary",       icon: Monitor },
-  supervisor: { label: "Supervisor", color: "bg-destructive/15 text-destructive", icon: Shield },
-}
-
-const statusConfig: Record<EmployeeStatus, { label: string; color: string }> = {
-  active:     { label: "Active",     color: "bg-chart-3/15 text-chart-3" },
-  on_leave:   { label: "On Leave",   color: "bg-primary/15 text-primary" },
-  suspended:  { label: "Suspended",  color: "bg-destructive/15 text-destructive" },
-  terminated: { label: "Terminated", color: "bg-destructive/15 text-destructive" },
-  resigned:   { label: "Resigned",   color: "bg-secondary text-secondary-foreground" },
-}
 
 type FormState = {
   employee_no: string
@@ -149,18 +138,12 @@ export function EmployeesTab() {
 
   async function loadAll() {
     setLoading(true)
-    const [empRes, deptRes, posRes, siteRes, probRes] = await Promise.all([
-      supabase.from("employees").select("*").order("created_at", { ascending: false }),
-      supabase.from("departments").select("*").eq("is_active", true).order("name"),
-      supabase.from("positions").select("*").eq("is_active", true).order("title"),
-      supabase.from("sites").select("*").eq("is_active", true).order("name"),
-      supabase.from("probation_records").select("employee_id, status").in("status", ["ongoing", "extended"]),
-    ])
-    setEmployees((empRes.data ?? []) as Employee[])
-    setDepartments((deptRes.data ?? []) as Department[])
-    setPositions((posRes.data ?? []) as Position[])
-    setSites((siteRes.data ?? []) as Site[])
-    setProbationIds(new Set((probRes.data ?? []).map((p: any) => p.employee_id as string)))
+    const data = await fetchEmployeesAndLookups()
+    setEmployees(data.employees)
+    setDepartments(data.departments)
+    setPositions(data.positions)
+    setSites(data.sites)
+    setProbationIds(data.probationIds)
     setLoading(false)
   }
 
@@ -236,12 +219,9 @@ export function EmployeesTab() {
       emergency_contact_phone: form.emergency_contact_phone.trim() || null,
     }
 
-    let res
-    if (editingId) {
-      res = await supabase.from("employees").update(payload).eq("id", editingId)
-    } else {
-      res = await supabase.from("employees").insert(payload)
-    }
+    const res = editingId
+      ? await updateEmployee(editingId, payload as EmployeePayload)
+      : await createEmployee(payload as EmployeePayload)
 
     setSaving(false)
 
@@ -259,7 +239,7 @@ export function EmployeesTab() {
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Delete employee "${name}"? This cannot be undone.`)) return
     setDeletingId(id)
-    const { error: delErr } = await supabase.from("employees").delete().eq("id", id)
+    const { error: delErr } = await deleteEmployee(id)
     setDeletingId(null)
     if (delErr) {
       alert(`Delete failed: ${delErr.message}`)
